@@ -1,508 +1,302 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DeepSight — Real-Time Deepfake Detector</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSight</title>
 
-    :root {
-      --cream:      #FAF8F4;
-      --warm:       #F2EFE9;
-      --charcoal:   #1A1A1C;
-      --mid:        #6B6B6B;
-      --soft:       #A8A39D;
-      --real:       #2A7D58;
-      --real-bg:    #E8F5EF;
-      --fake:       #C0392B;
-      --fake-bg:    #FBECEA;
-      --accent:     #3B6FE8;
-      --accent-bg:  #EEF2FD;
-      --border:     rgba(0,0,0,0.07);
-      --shadow:     0 24px 72px rgba(0,0,0,0.11);
-      --r:          22px;
-    }
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-    html, body {
-      min-height: 100%; background: var(--cream);
-      color: var(--charcoal);
-      font-family: 'DM Sans', sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
 
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background: radial-gradient(ellipse 800px 600px at 50% 40%, rgba(59,111,232,0.055) 0%, transparent 70%);
-      pointer-events: none; z-index: 0;
-    }
+<style>
 
-    body::after {
-      content: '';
-      position: fixed; inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
-      background-size: 200px; pointer-events: none; z-index: 0;
-    }
+body{
+font-family:'DM Sans',sans-serif;
+background:#faf8f4;
+margin:0;
+color:#1a1a1c;
+}
 
-    .page {
-      position: relative; z-index: 1;
-      min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 44px 20px 72px;
-    }
+.container{
+max-width:900px;
+margin:auto;
+padding:30px;
+}
 
-    /* ── Header ── */
-    header {
-      text-align: center; margin-bottom: 44px;
-      animation: fadeUp 0.7s ease both;
-    }
+.header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
 
-    .logo {
-      display: inline-flex; align-items: center; gap: 10px;
-      margin-bottom: 20px;
-    }
+.logo{
+font-family:'DM Serif Display',serif;
+font-size:28px;
+}
 
-    .logo-gem {
-      width: 38px; height: 38px; background: var(--charcoal);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-    }
+.video-box{
+margin-top:20px;
+position:relative;
+background:#111;
+border-radius:16px;
+overflow:hidden;
+aspect-ratio:4/3;
+}
 
-    .logo-name {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.45rem; letter-spacing: -0.02em;
-    }
+video{
+width:100%;
+height:100%;
+object-fit:cover;
+transform:scaleX(-1);
+}
 
-    h1 {
-      font-family: 'DM Serif Display', serif;
-      font-size: clamp(2rem, 5vw, 3rem);
-      line-height: 1.12; letter-spacing: -0.03em; margin-bottom: 12px;
-    }
+#faceBox{
+position:absolute;
+border:2px solid white;
+border-radius:6px;
+display:none;
+}
 
-    h1 em { font-style: italic; color: var(--mid); }
+.scan-line{
+position:absolute;
+left:0;
+right:0;
+height:2px;
+background:linear-gradient(90deg,transparent,#fff,transparent);
+animation:scan 3s infinite;
+}
 
-    .sub {
-      font-size: 0.95rem; color: var(--mid);
-      font-weight: 300; line-height: 1.65;
-      max-width: 380px; margin: 0 auto;
-    }
+@keyframes scan{
+0%{top:0}
+100%{top:100%}
+}
 
-    /* ── Card ── */
-    .card {
-      width: 100%; max-width: 700px;
-      background: #fff; border-radius: var(--r);
-      box-shadow: var(--shadow); border: 1px solid var(--border);
-      overflow: hidden;
-      animation: fadeUp 0.7s 0.12s ease both;
-      transition: box-shadow 0.5s ease;
-    }
+.controls{
+margin-top:20px;
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+}
 
-    .card.is-real { box-shadow: 0 0 0 2px rgba(42,125,88,0.3), var(--shadow); }
-    .card.is-fake { box-shadow: 0 0 0 2px rgba(192,57,43,0.3), var(--shadow); }
+button{
+padding:10px 18px;
+border-radius:30px;
+border:none;
+cursor:pointer;
+}
 
-    /* ── Viewport ── */
-    .viewport {
-      position: relative; width: 100%; aspect-ratio: 4/3;
-      background: #111; overflow: hidden;
-    }
+.start{
+background:#1a1a1c;
+color:white;
+}
 
-    #video {
-      width: 100%; height: 100%; object-fit: cover; display: block;
-      transform: scaleX(-1); opacity: 0;
-      transition: opacity 0.6s;
-    }
-    #video.live { opacity: 1; }
-    #canvas { display: none; }
+.stop{
+background:#ddd;
+}
 
-    .idle-state {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 14px;
-      transition: opacity 0.4s;
-    }
-    .idle-state.hidden { opacity: 0; pointer-events: none; }
+.result{
+margin-top:20px;
+font-size:22px;
+font-family:'DM Serif Display',serif;
+}
 
-    .idle-ring {
-      width: 72px; height: 72px; border-radius: 50%;
-      border: 1.5px solid rgba(255,255,255,0.12);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .idle-state p { font-size: 0.85rem; color: rgba(255,255,255,0.3); font-weight: 300; }
+.attention img{
+margin-top:10px;
+width:240px;
+border-radius:10px;
+}
 
-    /* Corners */
-    .corner {
-      position: absolute; width: 26px; height: 26px;
-      border-color: rgba(255,255,255,0.3); border-style: solid;
-      pointer-events: none; transition: border-color 0.5s;
-    }
-    .card.is-real .corner { border-color: rgba(42,125,88,0.65); }
-    .card.is-fake .corner { border-color: rgba(192,57,43,0.65); }
-    .corner.tl { top:14px; left:14px;   border-width:2px 0 0 2px; border-radius:5px 0 0 0; }
-    .corner.tr { top:14px; right:14px;  border-width:2px 2px 0 0; border-radius:0 5px 0 0; }
-    .corner.bl { bottom:14px; left:14px;  border-width:0 0 2px 2px; border-radius:0 0 0 5px; }
-    .corner.br { bottom:14px; right:14px; border-width:0 2px 2px 0; border-radius:0 0 5px 0; }
+canvas{
+margin-top:30px;
+}
 
-    /* Scan line */
-    .scan-line {
-      position: absolute; left:0; right:0; height:1.5px;
-      background: linear-gradient(90deg, transparent, rgba(59,111,232,0.5), transparent);
-      opacity:0; pointer-events:none; transition: opacity 0.3s;
-    }
-    .scan-line.on { opacity:1; animation: scan 2.8s ease-in-out infinite; }
-
-    /* Verdict pill */
-    .verdict-pill {
-      position: absolute; top:14px; left:50%;
-      transform: translateX(-50%) translateY(-56px);
-      background: rgba(255,255,255,0.93);
-      backdrop-filter: blur(16px); border-radius: 100px;
-      padding: 7px 18px 7px 10px;
-      display: flex; align-items: center; gap: 9px;
-      font-size: 0.82rem; font-weight: 600;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.13);
-      transition: transform 0.55s cubic-bezier(0.34,1.56,0.64,1);
-      white-space: nowrap; z-index: 5;
-    }
-    .verdict-pill.show { transform: translateX(-50%) translateY(0); }
-
-    .vdot {
-      width: 9px; height: 9px; border-radius: 50%;
-      background: var(--soft); transition: background 0.4s; flex-shrink:0;
-    }
-
-    /* ── Confidence bar ── */
-    .conf-section { padding: 18px 28px; border-bottom: 1px solid var(--border); }
-    .conf-head {
-      display: flex; justify-content: space-between;
-      font-size: 0.72rem; font-weight: 500;
-      text-transform: uppercase; letter-spacing: 0.09em;
-      color: var(--soft); margin-bottom: 9px;
-    }
-    .conf-track {
-      height: 5px; background: var(--warm);
-      border-radius: 100px; overflow: hidden; position: relative;
-    }
-    .conf-fill {
-      position: absolute; top:0; left:0; height:100%;
-      border-radius: 100px; width:0%;
-      transition: width 0.55s cubic-bezier(0.34,1.2,0.64,1), background 0.4s;
-    }
-
-    /* ── Stats ── */
-    .stats {
-      display: grid; grid-template-columns: repeat(4,1fr);
-      border-bottom: 1px solid var(--border);
-    }
-    .stat { padding: 18px 20px; border-right: 1px solid var(--border); }
-    .stat:last-child { border-right: none; }
-    .stat-lbl {
-      font-size: 0.68rem; font-weight: 500;
-      text-transform: uppercase; letter-spacing: 0.09em;
-      color: var(--soft); margin-bottom: 5px;
-    }
-    .stat-val {
-      font-family: 'DM Serif Display', serif;
-      font-size: 1.45rem; letter-spacing: -0.02em;
-      color: var(--charcoal); transition: color 0.4s;
-    }
-    .stat-val.real { color: var(--real); }
-    .stat-val.fake { color: var(--fake); }
-
-    /* ── Controls ── */
-    .controls {
-      padding: 22px 28px;
-      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    }
-
-    .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 11px 22px; border-radius: 100px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.88rem; font-weight: 500;
-      border: none; cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
-    }
-    .btn-primary {
-      background: var(--charcoal); color: #fff;
-      box-shadow: 0 4px 14px rgba(26,26,28,0.22);
-    }
-    .btn-primary:hover:not(:disabled) { background:#2e2e31; transform:translateY(-1px); }
-    .btn-primary:disabled { opacity:0.35; cursor:not-allowed; }
-
-    .btn-ghost {
-      background: var(--warm); color: var(--charcoal);
-      border: 1px solid var(--border);
-    }
-    .btn-ghost:hover:not(:disabled) { background:#e9e5de; transform:translateY(-1px); }
-    .btn-ghost:disabled { opacity:0.35; cursor:not-allowed; }
-
-    .status-chip {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 7px 14px; border-radius: 100px;
-      font-size: 0.78rem; font-weight: 500;
-      background: var(--accent-bg); color: var(--accent);
-      margin-left: auto; transition: background 0.3s, color 0.3s;
-    }
-    .status-chip.ok  { background: var(--real-bg); color: var(--real); }
-    .status-chip.err { background: var(--fake-bg); color: var(--fake); }
-
-    .chip-dot {
-      width:7px; height:7px; border-radius:50%;
-      background:currentColor; animation: pulse 2s ease infinite;
-    }
-    .chip-dot.still { animation:none; }
-
-    /* ── Animations ── */
-    @keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes spin   { to{transform:rotate(360deg)} }
-    @keyframes scan   { 0%{top:0%} 100%{top:100%} }
-    @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-    .foot {
-      margin-top: 22px; font-size: 0.76rem; color: var(--soft);
-      text-align: center; animation: fadeUp 0.7s 0.4s ease both;
-    }
-
-    @media (max-width:560px) {
-      .stats { grid-template-columns: 1fr 1fr; }
-      .stat:nth-child(2) { border-right:none; }
-      .stat:nth-child(3) { border-top:1px solid var(--border); }
-      .stat:nth-child(4) { border-top:1px solid var(--border); border-right:none; }
-      .controls { padding:18px 20px; }
-      .status-chip { margin-left:0; }
-    }
-  </style>
+</style>
 </head>
+
 <body>
-<div class="page">
 
-  <header>
-    <div class="logo">
-      <div class="logo-gem">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round">
-          <circle cx="12" cy="12" r="4"/>
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
-        </svg>
-      </div>
-      <span class="logo-name">DeepSight</span>
-    </div>
-    <h1>Detect <em>the unreal</em><br>in real time.</h1>
-    <p class="sub">AI-powered deepfake detection running entirely on your machine.</p>
-  </header>
+<div class="container">
 
-  <div class="card" id="card">
-    <div class="viewport">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="canvas"></canvas>
+<div class="header">
+<div class="logo">DeepSight</div>
+</div>
 
-      <div class="idle-state" id="idleState">
-        <div class="idle-ring">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.4" stroke-linecap="round">
-            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
-          </svg>
-        </div>
-        <p>Press Start Detection</p>
-      </div>
+<div class="video-box">
+<video id="video" autoplay muted playsinline></video>
+<div id="faceBox"></div>
+<div class="scan-line"></div>
+</div>
 
-      <div class="scan-line" id="scanLine"></div>
-      <div class="corner tl"></div><div class="corner tr"></div>
-      <div class="corner bl"></div><div class="corner br"></div>
+<div class="result" id="result">Press Start</div>
 
-      <div class="verdict-pill" id="pill">
-        <div class="vdot" id="vdot"></div>
-        <span id="pillText">Analyzing…</span>
-      </div>
-    </div>
+<div class="controls">
 
-    <div class="conf-section">
-      <div class="conf-head"><span>Confidence</span><span id="confPct">—</span></div>
-      <div class="conf-track"><div class="conf-fill" id="confFill"></div></div>
-    </div>
+<button class="start" onclick="startCamera()">Start</button>
+<button class="stop" onclick="stopCamera()">Stop</button>
 
-    <div class="stats">
-      <div class="stat"><div class="stat-lbl">Verdict</div><div class="stat-val" id="sVerdict">—</div></div>
-      <div class="stat"><div class="stat-lbl">Score</div><div class="stat-val" id="sScore">—</div></div>
-      <div class="stat"><div class="stat-lbl">Confidence</div><div class="stat-val" id="sConf">—</div></div>
-      <div class="stat"><div class="stat-lbl">FPS</div><div class="stat-val" id="sFps">—</div></div>
-    </div>
+<input type="file" id="uploadInput">
 
-    <div class="controls">
-      <button class="btn btn-primary" id="startBtn" onclick="startCamera()">
-        <svg width="14" height="14" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="white"/></svg>
-        Start Detection
-      </button>
-      <button class="btn btn-ghost" id="stopBtn" onclick="stopCamera()" disabled>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-        Stop
-      </button>
-      <div class="status-chip ok" id="statusChip">
-        <div class="chip-dot still" id="chipDot"></div>
-        <span id="statusText">Ready</span>
-      </div>
-    </div>
-  </div>
+<button onclick="saveResult()">Save Result</button>
 
-  <p class="foot">All processing is local &nbsp;·&nbsp; No data leaves your machine</p>
+</div>
+
+<div class="attention">
+<h3>Artifact Visualization</h3>
+<img id="attentionMap">
+</div>
+
+<canvas id="probChart"></canvas>
+
 </div>
 
 <script>
-const INTERVAL = 600; // ms between frames sent to server
 
-let stream     = null;
-let detecting  = false;
-let rafId      = null;
-let lastSend   = 0;
-let frameCount = 0;
-let fpsTimer   = 0;
-let busy       = false; // prevent overlapping requests
+let stream=null
+let detecting=false
 
-async function startCamera() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width:{ideal:640}, height:{ideal:480} },
-      audio: false
-    });
-    const video = document.getElementById('video');
-    video.srcObject = stream;
-    await video.play();
-    video.classList.add('live');
+async function startCamera(){
 
-    document.getElementById('idleState').classList.add('hidden');
-    document.getElementById('scanLine').classList.add('on');
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled  = false;
-    setStatus('Detecting…', 'ok');
+stream=await navigator.mediaDevices.getUserMedia({video:true})
 
-    detecting  = true;
-    frameCount = 0;
-    fpsTimer   = performance.now();
-    rafId      = requestAnimationFrame(loop);
+const video=document.getElementById("video")
+video.srcObject=stream
 
-  } catch(e) {
-    setStatus('Camera error', 'err');
-    console.error(e);
-  }
+detecting=true
+detectLoop()
+
 }
 
-function stopCamera() {
-  detecting = false;
-  if (rafId) cancelAnimationFrame(rafId);
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+function stopCamera(){
 
-  const video = document.getElementById('video');
-  video.srcObject = null;
-  video.classList.remove('live');
+detecting=false
 
-  document.getElementById('idleState').classList.remove('hidden');
-  document.getElementById('scanLine').classList.remove('on');
-  document.getElementById('pill').classList.remove('show');
-  document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled  = true;
-  document.getElementById('card').className    = 'card';
-  setStatus('Ready', 'ok');
-  clearStats();
+if(stream){
+stream.getTracks().forEach(t=>t.stop())
 }
 
-function loop(now) {
-  if (!detecting) return;
-
-  frameCount++;
-  if (now - fpsTimer >= 1000) {
-    document.getElementById('sFps').textContent =
-      Math.round((frameCount * 1000) / (now - fpsTimer));
-    frameCount = 0; fpsTimer = now;
-  }
-
-  if (!busy && now - lastSend >= INTERVAL) {
-    lastSend = now;
-    sendFrame();
-  }
-
-  rafId = requestAnimationFrame(loop);
 }
 
-async function sendFrame() {
-  const video  = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  if (video.readyState < 2) return;
+async function detectLoop(){
 
-  busy = true;
-  canvas.width = canvas.height = 192;
-  const ctx = canvas.getContext('2d');
-  ctx.save(); ctx.scale(-1, 1);
-  ctx.drawImage(video, -192, 0, 192, 192);
-  ctx.restore();
+if(!detecting)return
 
-  const imageData = canvas.toDataURL('image/jpeg', 0.85);
+const video=document.getElementById("video")
 
-  try {
-    const res  = await fetch('/predict', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: imageData })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    applyResult(data);
-  } catch(e) {
-    console.error('Predict error:', e);
-    setStatus('Server error', 'err');
-  } finally {
-    busy = false;
-  }
+const canvas=document.createElement("canvas")
+canvas.width=192
+canvas.height=192
+
+const ctx=canvas.getContext("2d")
+ctx.drawImage(video,0,0,192,192)
+
+const image=canvas.toDataURL("image/jpeg")
+
+const res=await fetch("/predict",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({image})
+})
+
+const data=await res.json()
+
+applyResult(data)
+
+setTimeout(detectLoop,600)
+
+}
+function applyResult(data){
+
+document.getElementById("result").innerText=
+data.label+" ("+data.confidence+"%)"
+
+if(data.bbox){
+
+const [x,y,w,h]=data.bbox
+
+const box=document.getElementById("faceBox")
+
+box.style.display="block"
+box.style.left=x+"px"
+box.style.top=y+"px"
+box.style.width=w+"px"
+box.style.height=h+"px"
+
 }
 
-function applyResult(data) {
-  const { is_fake, label, confidence, score } = data;
-  const cls   = is_fake ? 'fake' : 'real';
-  const color = is_fake ? 'var(--fake)' : 'var(--real)';
-  const grad  = is_fake
-    ? 'linear-gradient(90deg,var(--fake),#e57368)'
-    : 'linear-gradient(90deg,var(--real),#52c98a)';
+if(data.attention){
 
-  const pill = document.getElementById('pill');
-  pill.classList.add('show');
-  document.getElementById('vdot').style.background      = color;
-  document.getElementById('pillText').textContent       = `${label} — ${confidence}%`;
-  document.getElementById('pillText').style.color       = color;
+document.getElementById("attentionMap").src=
+"data:image/jpeg;base64,"+data.attention
 
-  document.getElementById('card').className = `card is-${cls}`;
-
-  document.getElementById('confFill').style.width      = confidence + '%';
-  document.getElementById('confFill').style.background = grad;
-  document.getElementById('confPct').textContent       = confidence + '%';
-
-  const sv = document.getElementById('sVerdict');
-  sv.textContent = is_fake ? 'Fake' : 'Real';
-  sv.className   = 'stat-val ' + cls;
-
-  const ss = document.getElementById('sScore');
-  ss.textContent = score.toFixed(3);
-  ss.className   = 'stat-val ' + cls;
-
-  const sc = document.getElementById('sConf');
-  sc.textContent = confidence + '%';
-  sc.className   = 'stat-val ' + cls;
 }
 
-function clearStats() {
-  ['sVerdict','sScore','sConf','sFps'].forEach(id => {
-    const el = document.getElementById(id);
-    el.textContent = '—'; el.className = 'stat-val';
-  });
-  document.getElementById('confFill').style.width = '0%';
-  document.getElementById('confPct').textContent  = '—';
+updateGraph(data.score)
+
 }
 
-function setStatus(msg, type) {
-  document.getElementById('statusText').textContent = msg;
-  document.getElementById('statusChip').className =
-    'status-chip' + (type === 'ok' ? ' ok' : type === 'err' ? ' err' : '');
-  document.getElementById('chipDot').className =
-    'chip-dot' + (type === 'loading' ? '' : ' still');
+const ctx=document.getElementById('probChart')
+
+const chart=new Chart(ctx,{
+type:'line',
+data:{
+labels:[],
+datasets:[{
+label:'Fake Probability',
+data:[],
+borderColor:'#1a1a1c',
+tension:.4
+}]
+},
+options:{animation:false}
+})
+
+function updateGraph(score){
+
+chart.data.datasets[0].data.push(score)
+
+if(chart.data.datasets[0].data.length>30)
+chart.data.datasets[0].data.shift()
+
+chart.update()
+
 }
+
+document.getElementById("uploadInput")
+.addEventListener("change",async e=>{
+
+let file=e.target.files[0]
+
+let form=new FormData()
+
+form.append("image",file)
+
+let res=await fetch("/upload",{method:"POST",body:form})
+
+let data=await res.json()
+
+alert("Result: "+data.label)
+
+})
+
+function saveResult(){
+
+html2canvas(document.body).then(canvas=>{
+
+let link=document.createElement("a")
+
+link.download="deepsight-result.png"
+
+link.href=canvas.toDataURL()
+
+link.click()
+
+})
+
+}
+
 </script>
+
 </body>
 </html>
