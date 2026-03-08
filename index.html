@@ -1,639 +1,799 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEEPSIGHT // N-CORE ANALYTICS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --bg-base: #020617;
-            --bg-surface: rgba(15, 23, 42, 0.6);
-            --border-glow: rgba(56, 189, 248, 0.3);
-            --border-solid: rgba(56, 189, 248, 0.15);
-            --accent-cyan: #38bdf8;
-            --accent-blue: #2563eb;
-            --alert-red: #e11d48;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --font-ui: 'Rajdhani', sans-serif;
-            --font-mono: 'Space Mono', monospace;
-        }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; cursor: crosshair; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        body {
-            background-color: var(--bg-base);
-            color: var(--text-main);
-            font-family: var(--font-ui);
-            overflow: hidden;
-            height: 100vh;
-            background-image: 
-                radial-gradient(circle at 50% 0%, #0f172a 0%, transparent 70%),
-                linear-gradient(to bottom, transparent 0%, rgba(2,6,23,1) 100%);
-        }
+<title>DeepSight</title>
 
-        /* --- BOOT SEQUENCE --- */
-        #boot-screen {
-            position: fixed;
-            inset: 0;
-            background: var(--bg-base);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            font-family: var(--font-mono);
-            transition: opacity 1.2s cubic-bezier(0.7, 0, 0.3, 1);
-        }
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 
-        .boot-logo {
-            font-size: 3rem;
-            font-weight: 700;
-            letter-spacing: 10px;
-            color: var(--accent-cyan);
-            text-shadow: 0 0 20px var(--border-glow);
-            margin-bottom: 20px;
-            animation: pulse 2s infinite;
-        }
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
 
-        .progress-container {
-            width: 300px;
-            height: 2px;
-            background: rgba(255,255,255,0.1);
-            position: relative;
-            overflow: hidden;
-        }
+<!-- Lenis smooth scroll -->
+<script src="https://unpkg.com/@studio-freight/lenis@1.0.42/bundled/lenis.min.js"></script>
 
-        .progress-bar {
-            position: absolute;
-            top: 0; left: 0; height: 100%;
-            background: var(--accent-cyan);
-            width: 0%;
-            box-shadow: 0 0 10px var(--accent-cyan);
-            transition: width 0.1s linear;
-        }
+<style>
 
-        .boot-log {
-            margin-top: 20px;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            height: 20px;
-        }
+/* ---------- RESET ---------- */
 
-        /* --- MAIN DASHBOARD LAYOUT --- */
-        #dashboard {
-            display: none;
-            grid-template-columns: 300px 1fr 350px;
-            grid-template-rows: 70px 1fr 200px;
-            gap: 20px;
-            height: 100vh;
-            padding: 20px;
-            opacity: 0;
-            animation: fadeInGrid 1s ease 0.5s forwards;
-        }
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+}
 
-        /* --- GLASS PANELS --- */
-        .panel {
-            background: var(--bg-surface);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--border-solid);
-            border-radius: 8px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            overflow: hidden;
-        }
+body{
 
-        .panel::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-            opacity: 0.5;
-        }
+font-family:'DM Sans',sans-serif;
 
-        .panel-header {
-            padding: 10px 15px;
-            border-bottom: 1px solid var(--border-solid);
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: var(--accent-cyan);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+background:linear-gradient(180deg,#f4f3ef 0%,#e8e5dc 100%);
 
-        .panel-content { padding: 15px; flex-grow: 1; overflow-y: auto; }
+color:#111;
 
-        /* --- HEADER (TOP ROW) --- */
-        .header-bar {
-            grid-column: 1 / -1;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+overflow-x:hidden;
 
-        .brand h1 {
-            font-size: 1.8rem;
-            letter-spacing: 4px;
-            color: #fff;
-        }
+}
 
-        .brand span { color: var(--accent-cyan); }
+/* ---------- LANDING ---------- */
 
-        .sys-status {
-            display: flex;
-            gap: 20px;
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-        }
+#landing{
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+position:fixed;
+inset:0;
 
-        .dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: var(--text-muted);
-        }
-        .dot.active {
-            background: var(--accent-cyan);
-            box-shadow: 0 0 10px var(--accent-cyan);
-            animation: blink 1s infinite;
-        }
+background:#0b0b0b;
 
-        /* --- LEFT SIDEBAR: CONTROLS & PARAMS --- */
-        .left-sidebar { grid-column: 1 / 2; grid-row: 2 / 3; }
-        
-        .param-group { margin-bottom: 20px; }
-        .param-label {
-            font-family: var(--font-mono);
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        .param-value {
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
+display:flex;
+align-items:center;
+justify-content:center;
 
-        .action-btn {
-            width: 100%;
-            background: rgba(56, 189, 248, 0.05);
-            border: 1px solid var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 12px;
-            font-family: var(--font-ui);
-            font-size: 1rem;
-            font-weight: 600;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
+color:white;
 
-        .action-btn:hover {
-            background: var(--accent-cyan);
-            color: var(--bg-base);
-            box-shadow: 0 0 20px var(--border-glow);
-        }
+z-index:100;
 
-        .action-btn.danger {
-            border-color: var(--alert-red);
-            color: var(--alert-red);
-        }
-        .action-btn.danger:hover {
-            background: var(--alert-red);
-            color: #fff;
-            box-shadow: 0 0 20px rgba(225, 29, 72, 0.4);
-        }
+}
 
-        /* --- CENTER: VIDEO FEED & HUD --- */
-        .main-viewer {
-            grid-column: 2 / 3;
-            grid-row: 2 / 4;
-            padding: 0;
-            background: #000;
-            position: relative;
-            border: 1px solid var(--border-solid);
-        }
+.hero{
 
-        #video {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            opacity: 0.8;
-            filter: contrast(1.1) saturate(1.2);
-        }
+text-align:center;
 
-        /* SVG Targeting HUD */
-        .hud-svg {
-            position: absolute;
-            inset: 0;
-            width: 100%; height: 100%;
-            pointer-events: none;
-            z-index: 10;
-        }
-        .hud-line { stroke: var(--accent-cyan); stroke-width: 1; opacity: 0.3; }
-        .hud-corner { stroke: var(--accent-cyan); stroke-width: 2; fill: none; }
+z-index:3;
 
-        .scanning-line {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 2px;
-            background: var(--accent-cyan);
-            box-shadow: 0 0 15px 2px var(--accent-cyan);
-            z-index: 15;
-            display: none;
-            animation: scanVertical 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
+}
 
-        /* Mini Artifact Window */
-        .artifact-mini {
-            position: absolute;
-            bottom: 20px; right: 20px;
-            width: 160px; height: 160px;
-            background: rgba(2, 6, 23, 0.85);
-            border: 1px solid var(--border-solid);
-            border-radius: 4px;
-            z-index: 20;
-            padding: 5px;
-            backdrop-filter: blur(10px);
-            display: flex;
-            flex-direction: column;
-        }
-        .artifact-mini span {
-            font-family: var(--font-mono);
-            font-size: 0.6rem;
-            color: var(--accent-cyan);
-            margin-bottom: 5px;
-        }
-        .artifact-mini img {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            border-radius: 2px;
-            filter: grayscale(100%) sepia(100%) hue-rotate(180deg) saturate(300%);
-        }
+.hero h1{
 
-        /* --- RIGHT SIDEBAR: TELEMETRY & CHARTS --- */
-        .right-sidebar { grid-column: 3 / 4; grid-row: 2 / 4; display: flex; flex-direction: column; gap: 20px;}
-        
-        .result-display {
-            text-align: center;
-            padding: 20px 0;
-        }
-        .result-score {
-            font-size: 3.5rem;
-            font-weight: 700;
-            line-height: 1;
-            font-family: var(--font-mono);
-            text-shadow: 0 0 20px rgba(255,255,255,0.1);
-        }
-        .result-label {
-            font-size: 1rem;
-            letter-spacing: 3px;
-            color: var(--text-muted);
-            margin-top: 5px;
-        }
+font-family:'DM Serif Display',serif;
 
-        .chart-container {
-            flex-grow: 1;
-            position: relative;
-            width: 100%;
-        }
+font-size:3.4rem;
 
-        /* --- BOTTOM TRAY: TERMINAL --- */
-        .bottom-tray {
-            grid-column: 1 / 2;
-            grid-row: 3 / 4;
-            font-family: var(--font-mono);
-        }
+margin-bottom:24px;
 
-        .terminal {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            line-height: 1.6;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-        }
-        .terminal p { margin-bottom: 4px; }
-        .terminal .highlight { color: var(--accent-cyan); }
-        .terminal .warn { color: var(--alert-red); }
+}
 
-        /* --- ANIMATIONS --- */
-        @keyframes scanVertical {
-            0% { top: 0; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-        @keyframes fadeInGrid {
-            from { opacity: 0; transform: scale(0.98); }
-            to { opacity: 1; transform: scale(1); display: grid; }
-        }
+.hero p{
 
-    </style>
+opacity:.6;
+
+margin-bottom:28px;
+
+}
+
+.hero button{
+
+padding:14px 30px;
+
+border-radius:40px;
+
+border:none;
+
+background:white;
+
+cursor:pointer;
+
+font-weight:500;
+
+transition:.25s;
+
+}
+
+.hero button:hover{
+
+transform:translateY(-2px);
+
+box-shadow:0 10px 20px rgba(0,0,0,0.2);
+
+}
+
+/* spotlight */
+
+#spotlight{
+
+position:absolute;
+
+width:420px;
+height:420px;
+
+border-radius:50%;
+
+background:radial-gradient(circle,
+rgba(255,255,255,0.16),
+transparent 70%);
+
+pointer-events:none;
+
+mix-blend-mode:screen;
+
+}
+
+/* ---------- APP ---------- */
+
+#app{
+
+display:none;
+
+max-width:1200px;
+
+margin:auto;
+
+padding:40px 30px;
+
+}
+
+/* ---------- HEADER ---------- */
+
+.header{
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+margin-bottom:30px;
+
+}
+
+.logo{
+
+font-family:'DM Serif Display',serif;
+
+font-size:1.7rem;
+
+}
+
+.menu-btn{
+
+font-size:28px;
+
+cursor:pointer;
+
+}
+
+/* ---------- MENU ---------- */
+
+#menu{
+
+position:fixed;
+
+top:0;
+
+right:-360px;
+
+width:360px;
+
+height:100%;
+
+background:white;
+
+padding:50px 40px;
+
+box-shadow:-20px 0 60px rgba(0,0,0,0.2);
+
+transition:.4s;
+
+z-index:50;
+
+}
+
+#menu.open{
+
+right:0;
+
+}
+
+#menu h2{
+
+font-family:'DM Serif Display',serif;
+
+margin-bottom:20px;
+
+}
+
+#menu p{
+
+margin-bottom:16px;
+
+line-height:1.6;
+
+opacity:.75;
+
+}
+
+/* ---------- LAYOUT ---------- */
+
+.detector{
+
+display:grid;
+
+grid-template-columns:1.4fr 1fr;
+
+gap:40px;
+
+}
+
+/* ---------- VIDEO ---------- */
+
+.video-box{
+
+position:relative;
+
+background:black;
+
+border-radius:16px;
+
+overflow:hidden;
+
+aspect-ratio:4/3;
+
+box-shadow:0 30px 60px rgba(0,0,0,0.3);
+
+}
+
+video{
+
+width:100%;
+height:100%;
+
+object-fit:cover;
+
+transform:scaleX(-1);
+
+}
+
+#faceBox{
+
+position:absolute;
+
+border:2px solid white;
+
+border-radius:6px;
+
+display:none;
+
+}
+
+/* scanning line */
+
+.scan-line{
+
+position:absolute;
+
+left:0;
+
+right:0;
+
+height:2px;
+
+background:linear-gradient(90deg,transparent,white,transparent);
+
+animation:scan 3s infinite;
+
+}
+
+@keyframes scan{
+
+0%{top:0}
+
+100%{top:100%}
+
+}
+
+/* ---------- PANEL ---------- */
+
+.panel{
+
+background:rgba(255,255,255,0.85);
+
+backdrop-filter:blur(12px);
+
+border-radius:16px;
+
+padding:26px;
+
+box-shadow:0 25px 60px rgba(0,0,0,0.1);
+
+border:1px solid rgba(0,0,0,0.05);
+
+}
+
+/* controls */
+
+.controls{
+
+display:flex;
+
+gap:10px;
+
+flex-wrap:wrap;
+
+margin-bottom:20px;
+
+}
+
+button{
+
+padding:10px 18px;
+
+border-radius:30px;
+
+border:none;
+
+cursor:pointer;
+
+font-weight:500;
+
+transition:.25s;
+
+}
+
+button:hover{
+
+transform:translateY(-2px);
+
+box-shadow:0 8px 18px rgba(0,0,0,0.15);
+
+}
+
+.start{
+
+background:#111;
+
+color:white;
+
+}
+
+.stop{
+
+background:#ddd;
+
+}
+
+/* result */
+
+.result{
+
+font-size:22px;
+
+font-family:'DM Serif Display',serif;
+
+margin-bottom:12px;
+
+}
+
+/* heatmap */
+
+.attention img{
+
+width:180px;
+
+max-width:100%;
+
+border-radius:8px;
+
+margin-top:10px;
+
+}
+
+/* graph */
+
+canvas{
+
+margin-top:12px;
+
+}
+
+/* footer */
+
+.footer{
+
+margin-top:40px;
+
+opacity:.6;
+
+font-size:.9rem;
+
+}
+
+/* responsive */
+
+@media(max-width:900px){
+
+.detector{
+
+grid-template-columns:1fr;
+
+}
+
+}
+
+</style>
+
 </head>
+
 <body>
 
-    <div id="boot-screen">
-        <div class="boot-logo">DEEPSIGHT</div>
-        <div class="progress-container">
-            <div class="progress-bar" id="boot-progress"></div>
-        </div>
-        <div class="boot-log" id="boot-log">INITIALIZING NEURAL KERNEL...</div>
-    </div>
+<!-- LANDING -->
 
-    <div id="dashboard">
-        
-        <div class="panel header-bar">
-            <div class="brand"><h1>DEEP<span>SIGHT</span> // PRO</h1></div>
-            <div class="sys-status">
-                <div class="status-indicator">
-                    <div class="dot" id="dot-cam"></div> CAM_LINK
-                </div>
-                <div class="status-indicator">
-                    <div class="dot active"></div> NET_UPLINK
-                </div>
-            </div>
-        </div>
+<div id="landing">
 
-        <div class="panel left-sidebar">
-            <div class="panel-header">System Parameters</div>
-            <div class="panel-content">
-                <div class="param-group">
-                    <div class="param-label">Model Architecture</div>
-                    <div class="param-value" style="color: var(--accent-cyan);">MobileNet-V3-ATTN</div>
-                </div>
-                <div class="param-group">
-                    <div class="param-label">Inference Target</div>
-                    <div class="param-value">192x192 @ 30FPS</div>
-                </div>
-                <div class="param-group" style="margin-bottom: 40px;">
-                    <div class="param-label">Frame Latency</div>
-                    <div class="param-value" id="latency-val">-- ms</div>
-                </div>
+<div id="spotlight"></div>
 
-                <button class="action-btn" onclick="startSystem()">Initialize Stream</button>
-                <button class="action-btn danger" onclick="stopSystem()">Halt Process</button>
-            </div>
-        </div>
+<div class="hero">
 
-        <div class="panel main-viewer">
-            <video id="video" autoplay muted playsinline></video>
-            <div class="scanning-line" id="scanner"></div>
-            
-            <svg class="hud-svg" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50%" cy="50%" r="40" stroke="rgba(56, 189, 248, 0.4)" stroke-width="1" fill="none" stroke-dasharray="4 4"/>
-                <circle cx="50%" cy="50%" r="60" stroke="rgba(56, 189, 248, 0.2)" stroke-width="1" fill="none"/>
-                <line x1="0" y1="50%" x2="100%" y2="50%" class="hud-line" />
-                <line x1="50%" y1="0" x2="50%" y2="100%" class="hud-line" />
-                <path d="M 30,50 L 30,30 L 50,30" class="hud-corner"/>
-                <path d="M calc(100% - 50),30 L calc(100% - 30),30 L calc(100% - 30),50" class="hud-corner"/>
-                <path d="M 30,calc(100% - 50) L 30,calc(100% - 30) L 50,calc(100% - 30)" class="hud-corner"/>
-                <path d="M calc(100% - 50),calc(100% - 30) L calc(100% - 30),calc(100% - 30) L calc(100% - 30),calc(100% - 50)" class="hud-corner"/>
-            </svg>
+<h1>Are you even real?</h1>
 
-            <div class="artifact-mini">
-                <span>// SPATIAL ARTIFACTS</span>
-                <img id="attentionMap" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Heatmap">
-            </div>
-        </div>
+<p>Deepfake detection running live.</p>
 
-        <div class="right-sidebar">
-            <div class="panel" style="flex: 0 0 auto;">
-                <div class="panel-header">Integrity Analysis</div>
-                <div class="panel-content result-display">
-                    <div class="result-score" id="score-val">--%</div>
-                    <div class="result-label" id="score-label">AWAITING FEED</div>
-                </div>
-            </div>
+<button onclick="enterApp()">Let's check</button>
 
-            <div class="panel" style="flex: 1 1 auto;">
-                <div class="panel-header">Probability Waveform</div>
-                <div class="panel-content chart-container">
-                    <canvas id="probChart"></canvas>
-                </div>
-            </div>
-        </div>
+</div>
 
-        <div class="panel bottom-tray">
-            <div class="panel-header">System Event Log</div>
-            <div class="panel-content terminal" id="terminal-log">
-                <p>System ready. Awaiting user execution.</p>
-            </div>
-        </div>
+</div>
 
-    </div>
+<!-- APP -->
 
-    <script>
-        /* --- BOOT SEQUENCE LOGIC --- */
-        const bootLogs = [
-            "ALLOCATING VRAM...",
-            "LOADING MOBILENET_V3_ATTN_WEIGHTS.h5...",
-            "VERIFYING NEURAL HASH...",
-            "ESTABLISHING SECURE UI CONTEXT...",
-            "SYSTEM ONLINE."
-        ];
-        
-        window.onload = () => {
-            let progress = 0;
-            let logIndex = 0;
-            const bar = document.getElementById('boot-progress');
-            const logText = document.getElementById('boot-log');
-            
-            const bootInterval = setInterval(() => {
-                progress += Math.random() * 15;
-                if(progress > 100) progress = 100;
-                bar.style.width = `${progress}%`;
+<div id="app">
 
-                if(progress > (logIndex + 1) * 20 && logIndex < bootLogs.length) {
-                    logText.innerText = bootLogs[logIndex];
-                    logIndex++;
-                }
+<div class="header">
 
-                if(progress === 100) {
-                    clearInterval(bootInterval);
-                    setTimeout(() => {
-                        document.getElementById('boot-screen').style.opacity = '0';
-                        setTimeout(() => {
-                            document.getElementById('boot-screen').style.display = 'none';
-                            document.getElementById('dashboard').style.display = 'grid';
-                        }, 1200);
-                    }, 500);
-                }
-            }, 200);
-        };
+<div class="logo">DeepSight</div>
 
-        /* --- TERMINAL LOGGER --- */
-        function logToTerminal(msg, type="normal") {
-            const term = document.getElementById('terminal-log');
-            const p = document.createElement('p');
-            const time = new Date().toISOString().split('T')[1].slice(0,-1);
-            p.innerHTML = `[${time}] <span class="${type === 'warn' ? 'warn' : 'highlight'}">${msg}</span>`;
-            term.appendChild(p);
-            if(term.childElementCount > 6) term.removeChild(term.firstChild);
-        }
+<div class="menu-btn" onclick="toggleMenu()">☰</div>
 
-        /* --- CAMERA & INFERENCE LOGIC --- */
-        let stream = null;
-        let isRunning = false;
-        let mockFrameCount = 0;
+</div>
 
-        async function startSystem() {
-            if(isRunning) return;
-            logToTerminal("Requesting hardware access...", "normal");
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                document.getElementById('video').srcObject = stream;
-                document.getElementById('dot-cam').classList.add('active');
-                document.getElementById('scanner').style.display = 'block';
-                isRunning = true;
-                logToTerminal("Stream established. Commencing inference.", "highlight");
-                inferenceLoop();
-            } catch (err) {
-                logToTerminal("Hardware access denied or unavailable.", "warn");
-            }
-        }
+<div class="detector">
 
-        function stopSystem() {
-            if(!isRunning) return;
-            isRunning = false;
-            if (stream) stream.getTracks().forEach(t => t.stop());
-            document.getElementById('video').srcObject = null;
-            document.getElementById('dot-cam').classList.remove('active');
-            document.getElementById('scanner').style.display = 'none';
-            document.getElementById('score-val').innerText = "--%";
-            document.getElementById('score-label').innerText = "HALTED";
-            document.getElementById('score-label').style.color = "var(--text-muted)";
-            logToTerminal("Stream terminated by user.", "warn");
-        }
+<!-- VIDEO -->
 
-        /* --- MOCK INFERENCE FOR UI --- */
-        function inferenceLoop() {
-            if (!isRunning) return;
+<div class="video-box">
 
-            // In production, you would grab a canvas frame and POST to your /predict endpoint here.
-            // For the dashboard UI demo, we simulate the data fluctuation.
-            
-            const start = performance.now();
-            
-            // Simulating a backend response
-            setTimeout(() => {
-                if(!isRunning) return;
-                
-                // Generate a believable mock score (mostly authentic with slight variations)
-                const isFakeSpike = Math.random() > 0.95; // 5% chance to spike high
-                const score = isFakeSpike ? (0.7 + Math.random() * 0.25) : (0.01 + Math.random() * 0.15);
-                
-                updateUI(score, performance.now() - start);
-                
-                // Loop
-                requestAnimationFrame(inferenceLoop);
-            }, 400 + Math.random() * 200); // Simulated 400-600ms latency
-        }
+<video id="video" autoplay muted playsinline></video>
 
-        function updateUI(score, latency) {
-            const percentage = (score * 100).toFixed(1);
-            const scoreEl = document.getElementById('score-val');
-            const labelEl = document.getElementById('score-label');
-            
-            scoreEl.innerText = `${percentage}%`;
-            document.getElementById('latency-val').innerText = `${Math.round(latency)} ms`;
+<div id="faceBox"></div>
 
-            if (score > 0.6) {
-                scoreEl.style.color = "var(--alert-red)";
-                labelEl.innerText = "SYNTHETIC DETECTED";
-                labelEl.style.color = "var(--alert-red)";
-                if(Math.random() > 0.8) logToTerminal(`Anomalous artifacts detected! Conf: ${percentage}%`, "warn");
-            } else {
-                scoreEl.style.color = "var(--text-main)";
-                labelEl.innerText = "AUTHENTIC";
-                labelEl.style.color = "var(--accent-cyan)";
-            }
+<div class="scan-line"></div>
 
-            // Update Chart
-            updateChart(score);
-            
-            mockFrameCount++;
-            if(mockFrameCount % 10 === 0) logToTerminal(`Processed 10 frames. Avg Latency: ${Math.round(latency)}ms`);
-        }
+</div>
 
-        /* --- CHART.JS SETUP (High-end styling) --- */
-        Chart.defaults.color = '#94a3b8';
-        Chart.defaults.font.family = "'Space Mono', monospace";
-        
-        const ctx = document.getElementById('probChart').getContext('2d');
-        
-        // Create gradient for chart fill
-        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(56, 189, 248, 0.5)');
-        gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+<!-- PANEL -->
 
-        const myChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: Array(25).fill(''),
-                datasets: [{
-                    label: 'Synthetic Probability',
-                    data: Array(25).fill(0),
-                    borderColor: '#38bdf8',
-                    borderWidth: 2,
-                    backgroundColor: gradient,
-                    fill: true,
-                    pointRadius: 0,
-                    tension: 0.4 // Smooth curves
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 0 }, // Handled by manual updates for real-time feel
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { display: false },
-                    y: { 
-                        min: 0, max: 1,
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { callback: (val) => (val * 100) + '%' }
-                    }
-                }
-            }
-        });
+<div class="panel">
 
-        function updateChart(newScore) {
-            const data = myChart.data.datasets[0].data;
-            data.push(newScore);
-            data.shift();
-            
-            // Change color dynamically based on threshold
-            if(newScore > 0.6) {
-                myChart.data.datasets[0].borderColor = '#e11d48'; // Red
-            } else {
-                myChart.data.datasets[0].borderColor = '#38bdf8'; // Cyan
-            }
-            
-            myChart.update();
-        }
-    </script>
+<div class="controls">
+
+<button class="start" onclick="startCamera()">Start</button>
+
+<button class="stop" onclick="stopCamera()">Stop</button>
+
+<input type="file" id="uploadInput">
+
+<button onclick="saveResult()">Share</button>
+
+</div>
+
+<div class="result" id="result">
+
+Press Start Detection
+
+</div>
+
+<h3>Artifact Visualization</h3>
+
+<div class="attention">
+
+<img id="attentionMap">
+
+</div>
+
+<h3>Fake Probability</h3>
+
+<canvas id="probChart"></canvas>
+
+</div>
+
+</div>
+
+<div class="footer">
+
+DeepSight • Real-time deepfake detection
+
+</div>
+
+</div>
+
+<!-- MENU -->
+
+<div id="menu">
+
+<h2>DeepSight</h2>
+
+<p>
+
+DeepSight is a real-time deepfake detection system powered by a MobileNetV3 model with attention layers.
+
+</p>
+
+<p>
+
+The system analyzes frames captured from camera or uploaded images and identifies artifacts generated by synthetic media.
+
+</p>
+
+<p>
+
+Version 1.0
+
+</p>
+
+<p>
+
+<a href="https://github.com/Arijit123789/deepsight" target="_blank">
+
+GitHub Repository
+
+</a>
+
+</p>
+
+</div>
+
+<script>
+
+/* ---------- LENIS ---------- */
+
+const lenis = new Lenis()
+
+function raf(time) {
+
+lenis.raf(time)
+
+requestAnimationFrame(raf)
+
+}
+
+requestAnimationFrame(raf)
+
+/* ---------- SPOTLIGHT ---------- */
+
+const spotlight = document.getElementById("spotlight")
+
+document.addEventListener("mousemove", e => {
+
+spotlight.style.left = e.clientX - 200 + "px"
+
+spotlight.style.top = e.clientY - 200 + "px"
+
+})
+
+/* ---------- ENTER APP ---------- */
+
+function enterApp(){
+
+document.getElementById("landing").style.display="none"
+
+document.getElementById("app").style.display="block"
+
+}
+
+/* ---------- MENU ---------- */
+
+function toggleMenu(){
+
+document.getElementById("menu").classList.toggle("open")
+
+}
+
+document.addEventListener("click",function(e){
+
+const menu=document.getElementById("menu")
+
+const btn=document.querySelector(".menu-btn")
+
+if(menu.classList.contains("open")){
+
+if(!menu.contains(e.target) && !btn.contains(e.target)){
+
+menu.classList.remove("open")
+
+}
+
+}
+
+})
+
+/* ---------- DETECTOR ---------- */
+
+let stream=null
+
+let detecting=false
+
+async function startCamera(){
+
+stream=await navigator.mediaDevices.getUserMedia({video:true})
+
+const video=document.getElementById("video")
+
+video.srcObject=stream
+
+detecting=true
+
+detectLoop()
+
+}
+
+function stopCamera(){
+
+detecting=false
+
+if(stream){
+
+stream.getTracks().forEach(t=>t.stop())
+
+}
+
+}
+
+async function detectLoop(){
+
+if(!detecting) return
+
+const video=document.getElementById("video")
+
+const canvas=document.createElement("canvas")
+
+canvas.width=192
+
+canvas.height=192
+
+const ctx=canvas.getContext("2d")
+
+ctx.drawImage(video,0,0,192,192)
+
+const image=canvas.toDataURL("image/jpeg")
+
+const res=await fetch("/predict",{
+
+method:"POST",
+
+headers:{"Content-Type":"application/json"},
+
+body:JSON.stringify({image})
+
+})
+
+const data=await res.json()
+
+applyResult(data)
+
+setTimeout(detectLoop,600)
+
+}
+
+function applyResult(data){
+
+document.getElementById("result").innerText=
+
+data.label+" ("+data.confidence+"%)"
+
+if(data.attention){
+
+document.getElementById("attentionMap").src=
+
+"data:image/jpeg;base64,"+data.attention
+
+}
+
+updateGraph(data.score)
+
+}
+
+/* ---------- GRAPH ---------- */
+
+const ctx=document.getElementById("probChart")
+
+const chart=new Chart(ctx,{
+
+type:'line',
+
+data:{
+
+labels:[],
+
+datasets:[{
+
+label:'Fake Probability',
+
+data:[],
+
+borderColor:'#111',
+
+tension:.4
+
+}]
+
+},
+
+options:{animation:false}
+
+})
+
+function updateGraph(score){
+
+chart.data.datasets[0].data.push(score)
+
+if(chart.data.datasets[0].data.length>40)
+
+chart.data.datasets[0].data.shift()
+
+chart.update()
+
+}
+
+/* ---------- UPLOAD ---------- */
+
+document.getElementById("uploadInput")
+
+.addEventListener("change",async e=>{
+
+let file=e.target.files[0]
+
+let form=new FormData()
+
+form.append("image",file)
+
+let res=await fetch("/upload",{method:"POST",body:form})
+
+let data=await res.json()
+
+alert("Result: "+data.label)
+
+})
+
+/* ---------- SCREENSHOT ---------- */
+
+function saveResult(){
+
+html2canvas(document.body).then(canvas=>{
+
+let link=document.createElement("a")
+
+link.download="deepsight-result.png"
+
+link.href=canvas.toDataURL()
+
+link.click()
+
+})
+
+}
+
+</script>
+
 </body>
 </html>
