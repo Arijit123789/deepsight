@@ -1,7 +1,7 @@
-flask
-flask-cors
-numpy
-pillow
+flask==2.3.3
+flask-cors==4.0.0
+numpy==1.24.3
+pillow==10.2.0
 tensorflow-cpu==2.13.0
-opencv-python-headless
-gunicorn
+opencv-python-headless==4.9.0.80
+gunicorn==21.2.0
