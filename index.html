@@ -1,585 +1,618 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>DeepSight</title>
-
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
-
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DeepSight — Deepfake Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
-
 <style>
-
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0e0e0e;--parchment:#F6F2EB;--warm:#EDE8DF;
+  --gold:#B8965A;--gold-lt:#D4B07A;
+  --real:#2E7D5A;--fake:#B83232;
+  --mid:#7A7570;--border:rgba(0,0,0,0.09);
+  --shadow:0 32px 80px rgba(0,0,0,0.13);
 }
+html,body{height:100%;overflow-x:hidden;background:var(--parchment)}
+body{font-family:'Syne',sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
 
-body{
-font-family:'DM Sans',sans-serif;
-background:linear-gradient(180deg,#f4f3ef 0%,#e6e3d9 100%);
-color:#111;
-overflow-x:hidden;
-}
-
-/* LANDING */
-
+/* ── LANDING ── */
 #landing{
-position:fixed;
-inset:0;
-background:#0c0c0c;
-display:flex;
-align-items:center;
-justify-content:center;
-color:white;
-z-index:100;
-transition:.6s;
+  position:fixed;inset:0;z-index:200;background:#080808;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;cursor:none;transition:opacity .8s ease;
+}
+#spotlight{
+  position:absolute;width:560px;height:560px;border-radius:50%;
+  background:radial-gradient(circle,rgba(184,150,90,0.15) 0%,transparent 70%);
+  pointer-events:none;transform:translate(-50%,-50%);
+  transition:left .07s ease,top .07s ease;z-index:1;
+}
+#landing::before{
+  content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,0.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,0.022) 1px,transparent 1px);
+  background-size:64px 64px;z-index:0;
+}
+#landing::after{
+  content:'';position:absolute;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+  background-size:200px;pointer-events:none;z-index:0;
+}
+.landing-inner{position:relative;z-index:2;text-align:center;max-width:680px;padding:0 32px}
+.l-eyebrow{
+  font-size:.7rem;font-weight:700;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--gold);margin-bottom:30px;
+  opacity:0;animation:fadeUp .7s .2s ease forwards;
+}
+.l-title{
+  font-family:'Cormorant Garamond',serif;font-weight:300;
+  font-size:clamp(3.4rem,8vw,6.8rem);line-height:1.02;letter-spacing:-.02em;
+  color:#fff;margin-bottom:12px;
+  opacity:0;animation:fadeUp .7s .35s ease forwards;
+}
+.l-title em{font-style:italic;color:var(--gold-lt)}
+.l-sub{
+  font-family:'Cormorant Garamond',serif;font-style:italic;
+  font-size:1.2rem;color:rgba(255,255,255,.32);margin-bottom:54px;
+  opacity:0;animation:fadeUp .7s .5s ease forwards;
+}
+.l-btn{
+  display:inline-flex;align-items:center;gap:12px;
+  padding:14px 38px;border-radius:100px;
+  border:1px solid rgba(184,150,90,.35);
+  background:rgba(184,150,90,.07);
+  color:var(--gold-lt);font-family:'Syne',sans-serif;
+  font-size:.82rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  cursor:none;transition:all .3s ease;
+  opacity:0;animation:fadeUp .7s .65s ease forwards;
+}
+.l-btn:hover{
+  background:rgba(184,150,90,.18);border-color:rgba(184,150,90,.65);
+  transform:translateY(-2px);box-shadow:0 14px 44px rgba(184,150,90,.14);
+}
+.l-btn svg{transition:transform .3s}.l-btn:hover svg{transform:translateX(4px)}
+.lc{position:absolute;width:42px;height:42px;z-index:2;opacity:.25}
+.lc.tl{top:30px;left:30px;border-top:1px solid var(--gold);border-left:1px solid var(--gold)}
+.lc.tr{top:30px;right:30px;border-top:1px solid var(--gold);border-right:1px solid var(--gold)}
+.lc.bl{bottom:30px;left:30px;border-bottom:1px solid var(--gold);border-left:1px solid var(--gold)}
+.lc.br{bottom:30px;right:30px;border-bottom:1px solid var(--gold);border-right:1px solid var(--gold)}
+#cursor{position:fixed;width:10px;height:10px;background:var(--gold);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:left .04s,top .04s,width .2s,height .2s}
+#cursor-ring{position:fixed;width:36px;height:36px;border:1px solid rgba(184,150,90,.45);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%);transition:left .1s,top .1s,width .3s,height .3s}
+
+/* ── APP ── */
+#app{display:none;min-height:100vh;background:var(--parchment);position:relative}
+#app::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  background-size:300px;pointer-events:none;z-index:0;
 }
 
-.hero{
-text-align:center;
+/* Topbar */
+.topbar{
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:20px 48px;border-bottom:1px solid var(--border);
+  background:rgba(246,242,235,.85);backdrop-filter:blur(14px);
+  animation:fadeDown .6s ease both;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{
+  width:30px;height:30px;border:1.5px solid var(--ink);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+}
+.brand-name{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;letter-spacing:-.01em}
+.brand-tag{
+  font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mid);padding:3px 10px;border:1px solid var(--border);border-radius:100px;margin-left:6px;
+}
+.topbar-right{display:flex;align-items:center;gap:14px}
+.status-pill{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:6px 14px;border-radius:100px;
+  font-size:.72rem;font-weight:700;letter-spacing:.05em;
+  background:var(--warm);border:1px solid var(--border);color:var(--mid);
+  transition:all .4s;
+}
+.status-pill.live{background:#e8f5ef;border-color:rgba(46,125,90,.2);color:var(--real)}
+.status-pill.alert{background:#fbecea;border-color:rgba(184,50,50,.2);color:var(--fake)}
+.sdot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.sdot.pulse{animation:pulse 1.5s ease infinite}
+.about-btn{
+  padding:8px 18px;border-radius:100px;border:1.5px solid var(--border);
+  background:transparent;font-family:'Syne',sans-serif;font-size:.75rem;font-weight:600;
+  cursor:pointer;color:var(--mid);transition:all .2s;
+}
+.about-btn:hover{background:var(--warm);color:var(--ink)}
+
+/* Main grid */
+.main{
+  position:relative;z-index:1;
+  display:grid;grid-template-columns:1.35fr 1fr;
+  height:calc(100vh - 69px);
 }
 
-.hero h1{
-font-family:'DM Serif Display',serif;
-font-size:3.4rem;
-margin-bottom:20px;
+/* Camera pane */
+.cam-pane{position:relative;border-right:1px solid var(--border);overflow:hidden;background:#0c0c0c}
+#video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;transition:opacity .5s}
+#video.live{opacity:1}
+#canvas{display:none}
+.cam-idle{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;
+  transition:opacity .4s;
 }
-
-.hero button{
-padding:14px 30px;
-border-radius:40px;
-border:none;
-background:white;
-cursor:pointer;
-font-weight:500;
-transition:.25s;
+.cam-idle.hidden{opacity:0;pointer-events:none}
+.cam-idle-ring{
+  width:88px;height:88px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.07);
+  display:flex;align-items:center;justify-content:center;
 }
-
-.hero button:hover{
-transform:translateY(-2px);
-box-shadow:0 10px 20px rgba(0,0,0,.35);
+.cam-idle p{
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.05rem;
+  color:rgba(255,255,255,.2);letter-spacing:.02em;
 }
-
-/* APP */
-
-#app{
-max-width:1200px;
-margin:auto;
-padding:40px;
-display:none;
+.scan-beam{
+  position:absolute;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(184,150,90,.55),transparent);
+  opacity:0;pointer-events:none;transition:opacity .3s;
 }
-
-/* HEADER */
-
-.header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:30px;
+.scan-beam.on{opacity:1;animation:scanbeam 3.2s ease-in-out infinite}
+.cam-corner{position:absolute;width:22px;height:22px;border-color:rgba(255,255,255,.18);border-style:solid;pointer-events:none;transition:border-color .5s}
+.cam-pane.is-real .cam-corner{border-color:rgba(100,200,150,.55)}
+.cam-pane.is-fake .cam-corner{border-color:rgba(220,100,100,.55)}
+.cam-corner.tl{top:16px;left:16px;border-width:1.5px 0 0 1.5px;border-radius:4px 0 0 0}
+.cam-corner.tr{top:16px;right:16px;border-width:1.5px 1.5px 0 0;border-radius:0 4px 0 0}
+.cam-corner.bl{bottom:16px;left:16px;border-width:0 0 1.5px 1.5px;border-radius:0 0 0 4px}
+.cam-corner.br{bottom:16px;right:16px;border-width:0 1.5px 1.5px 0;border-radius:0 0 4px 0}
+.verdict-overlay{
+  position:absolute;bottom:24px;left:50%;
+  transform:translateX(-50%) translateY(80px);
+  background:rgba(12,12,12,.78);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.07);border-radius:14px;
+  padding:18px 32px;text-align:center;min-width:220px;
+  transition:transform .6s cubic-bezier(.34,1.56,.64,1);
 }
-
-.logo{
-font-family:'DM Serif Display',serif;
-font-size:1.7rem;
+.verdict-overlay.show{transform:translateX(-50%) translateY(0)}
+.v-label{
+  font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;
+  letter-spacing:.03em;color:#fff;transition:color .4s;
 }
+.v-label.real{color:#74d4a0}.v-label.fake{color:#f07878}
+.v-conf{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-top:4px}
 
-.menu-btn{
-font-size:26px;
-cursor:pointer;
+/* Analysis pane */
+.analysis-pane{display:flex;flex-direction:column;overflow-y:auto;background:var(--parchment)}
+.analysis-pane::-webkit-scrollbar{width:0}
+.sec{padding:26px 34px;border-bottom:1px solid var(--border);animation:fadeUp .5s ease both}
+.sec-lbl{
+  font-size:.65rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mid);margin-bottom:14px;display:flex;align-items:center;gap:10px;
 }
+.sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* MENU */
-
-#menu{
-position:fixed;
-top:0;
-right:-340px;
-width:340px;
-height:100%;
-background:white;
-padding:50px 40px;
-box-shadow:-20px 0 60px rgba(0,0,0,0.25);
-transition:.35s;
-z-index:90;
+/* Buttons */
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 22px;border-radius:100px;
+  font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;
+  border:none;cursor:pointer;transition:all .2s;white-space:nowrap;
 }
+.btn-ink{background:var(--ink);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.btn-ink:hover:not(:disabled){background:#222;transform:translateY(-1px)}
+.btn-ink:disabled{opacity:.3;cursor:not-allowed}
+.btn-line{background:transparent;color:var(--ink);border:1.5px solid rgba(0,0,0,.12)}
+.btn-line:hover:not(:disabled){background:var(--warm);transform:translateY(-1px)}
+.btn-line:disabled{opacity:.3;cursor:not-allowed}
 
-#menu.open{
-right:0;
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scard{background:var(--warm);border:1px solid var(--border);border-radius:12px;padding:14px 18px}
+.scard-lbl{font-size:.63rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--mid);margin-bottom:5px}
+.scard-val{font-family:'Cormorant Garamond',serif;font-size:1.9rem;font-weight:400;letter-spacing:-.02em;color:var(--ink);transition:color .4s}
+.scard-val.real{color:var(--real)}.scard-val.fake{color:var(--fake)}
+
+/* Confidence bar */
+.conf-head{display:flex;justify-content:space-between;font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--mid);margin-bottom:8px;margin-top:14px}
+.conf-track{height:4px;background:rgba(0,0,0,.07);border-radius:100px;overflow:hidden;position:relative}
+.conf-fill{position:absolute;top:0;left:0;height:100%;border-radius:100px;width:0%;transition:width .55s cubic-bezier(.34,1.2,.64,1),background .4s}
+
+/* Chart */
+.chart-wrap{height:120px;position:relative}
+
+/* Attention */
+.attn-row{display:flex;gap:14px;align-items:center}
+.attn-thumb{
+  width:96px;height:96px;border-radius:10px;
+  background:var(--warm);border:1px solid var(--border);
+  overflow:hidden;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
 }
+.attn-thumb img{width:100%;height:100%;object-fit:cover}
+.attn-text{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:.98rem;color:var(--mid);line-height:1.65}
 
-#menu h2{
-font-family:'DM Serif Display',serif;
-margin-bottom:20px;
+/* Upload */
+.upload-zone{
+  border:1.5px dashed var(--border);border-radius:12px;padding:22px;
+  text-align:center;cursor:pointer;transition:all .25s;
+  font-size:.8rem;color:var(--mid);line-height:1.8;
 }
+.upload-zone:hover{background:var(--warm);border-color:var(--gold);color:var(--ink)}
 
-#menu p{
-margin-bottom:14px;
-line-height:1.6;
-opacity:.75;
+/* Footer */
+.pane-foot{
+  padding:18px 34px;font-size:.7rem;color:var(--mid);letter-spacing:.04em;
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:auto;
 }
-
-/* LAYOUT */
-
-.detector{
-display:grid;
-grid-template-columns:1.4fr 1fr;
-gap:40px;
+.share-btn{
+  display:inline-flex;align-items:center;gap:7px;font-family:'Syne',sans-serif;
+  font-size:.72rem;font-weight:700;letter-spacing:.04em;color:var(--mid);
+  background:none;border:none;cursor:pointer;transition:color .2s;
 }
+.share-btn:hover{color:var(--ink)}
 
-/* VIDEO */
-
-.video-box{
-position:relative;
-background:black;
-border-radius:16px;
-overflow:hidden;
-aspect-ratio:4/3;
-box-shadow:0 30px 60px rgba(0,0,0,.25);
+/* Sidebar */
+#sidebar{
+  position:fixed;top:0;right:-400px;width:400px;height:100%;
+  background:#fff;border-left:1px solid var(--border);
+  box-shadow:-24px 0 64px rgba(0,0,0,.07);
+  padding:52px 44px;z-index:100;
+  transition:right .4s cubic-bezier(.16,1,.3,1);overflow-y:auto;
 }
-
-.video-box::after{
-content:"";
-position:absolute;
-inset:0;
-border-radius:16px;
-box-shadow:inset 0 0 120px rgba(0,0,0,0.35);
-pointer-events:none;
+#sidebar.open{right:0}
+.sb-close{
+  position:absolute;top:18px;right:18px;
+  width:34px;height:34px;border-radius:50%;
+  background:var(--warm);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  transition:background .2s;
 }
-
-video{
-width:100%;
-height:100%;
-object-fit:cover;
-transform:scaleX(-1);
+.sb-close:hover{background:#ddd8cf}
+.sb-title{font-family:'Cormorant Garamond',serif;font-size:1.75rem;font-weight:400;margin-bottom:10px}
+.sb-body{font-size:.86rem;color:var(--mid);line-height:1.8;margin-bottom:16px}
+.sb-link{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:.78rem;font-weight:700;color:var(--ink);
+  text-decoration:none;border-bottom:1px solid var(--ink);padding-bottom:1px;
+  transition:opacity .2s;
 }
+.sb-link:hover{opacity:.55}
 
-.scan-line{
-position:absolute;
-left:0;
-right:0;
-height:2px;
-background:linear-gradient(90deg,transparent,white,transparent);
-animation:scan 3s infinite;
-}
+/* Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scanbeam{0%{top:0}100%{top:100%}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
-@keyframes scan{
-0%{top:0}
-100%{top:100%}
-}
-
-/* PANEL */
-
-.panel{
-background:rgba(255,255,255,.9);
-border-radius:16px;
-padding:26px;
-box-shadow:0 20px 50px rgba(0,0,0,.12);
-border:1px solid rgba(0,0,0,.05);
-}
-
-/* CONTROLS */
-
-.controls{
-display:flex;
-gap:10px;
-flex-wrap:wrap;
-margin-bottom:20px;
-}
-
-button{
-padding:10px 18px;
-border-radius:30px;
-border:none;
-cursor:pointer;
-font-weight:500;
-transition:.25s;
-}
-
-button:hover{
-transform:translateY(-2px);
-box-shadow:0 8px 16px rgba(0,0,0,.15);
-}
-
-.start{
-background:#111;
-color:white;
-}
-
-.stop{
-background:#ddd;
-}
-
-/* RESULT */
-
-.result{
-font-size:22px;
-font-family:'DM Serif Display',serif;
-margin-bottom:12px;
-}
-
-/* HEATMAP */
-
-.attention img{
-width:160px;
-border-radius:8px;
-margin-top:10px;
-}
-
-/* GRAPH */
-
-canvas{
-margin-top:12px;
-}
-
-/* FOOTER */
-
-.footer{
-margin-top:40px;
-opacity:.6;
-font-size:.9rem;
-}
-
+/* Responsive */
 @media(max-width:900px){
-
-.detector{
-grid-template-columns:1fr;
+  .main{grid-template-columns:1fr;height:auto}
+  .cam-pane{height:65vw;min-height:280px}
+  .topbar,.sec,.pane-foot{padding-left:22px;padding-right:22px}
 }
-
-}
-
 </style>
-
 </head>
-
 <body>
 
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
 <!-- LANDING -->
-
 <div id="landing">
-
-<div class="hero">
-
-<h1>Are you even real?</h1>
-
-<button onclick="enterApp()">Let's check</button>
-
-</div>
-
-</div>
-
-<!-- MENU -->
-
-<div id="menu">
-
-<h2>DeepSight</h2>
-
-<p>
-DeepSight is a real-time deepfake detection system powered by a MobileNetV3 neural network with attention layers.
-</p>
-
-<p>
-It analyzes frames captured from camera or uploaded images and identifies artifacts created by manipulated media.
-</p>
-
-<p>Version 1.0</p>
-
-<p>
-<a href="https://github.com/Arijit123789/deepsight" target="_blank">
-GitHub Repository
-</a>
-</p>
-
+  <div id="spotlight"></div>
+  <div class="lc tl"></div><div class="lc tr"></div>
+  <div class="lc bl"></div><div class="lc br"></div>
+  <div class="landing-inner">
+    <div class="l-eyebrow">Authenticity Intelligence · DeepSight</div>
+    <h1 class="l-title">Are you<br><em>even real?</em></h1>
+    <p class="l-sub">Real-time deepfake detection, frame by frame.</p>
+    <button class="l-btn" onclick="enterApp()">
+      Begin Analysis
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+  </div>
 </div>
 
 <!-- APP -->
-
 <div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
+        </svg>
+      </div>
+      <span class="brand-name">DeepSight</span>
+      <span class="brand-tag">v1.0</span>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill" id="statusPill">
+        <div class="sdot" id="sdot"></div>
+        <span id="statusTxt">Ready</span>
+      </div>
+      <button class="about-btn" onclick="toggleSidebar()">About</button>
+    </div>
+  </div>
 
-<div class="header">
+  <div class="main">
+    <!-- Camera -->
+    <div class="cam-pane" id="camPane">
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="canvas"></canvas>
+      <div class="cam-idle" id="camIdle">
+        <div class="cam-idle-ring">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="1.3" stroke-linecap="round">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </div>
+        <p>Awaiting camera input</p>
+      </div>
+      <div class="scan-beam" id="scanBeam"></div>
+      <div class="cam-corner tl"></div><div class="cam-corner tr"></div>
+      <div class="cam-corner bl"></div><div class="cam-corner br"></div>
+      <div class="verdict-overlay" id="vOverlay">
+        <div class="v-label" id="vLabel">—</div>
+        <div class="v-conf" id="vConf">Awaiting frame</div>
+      </div>
+    </div>
 
-<div class="logo">DeepSight</div>
+    <!-- Analysis -->
+    <div class="analysis-pane">
 
-<div class="menu-btn" onclick="toggleMenu()">☰</div>
+      <div class="sec" style="animation-delay:.05s">
+        <div class="sec-lbl">Camera Control</div>
+        <div class="btn-row">
+          <button class="btn btn-ink" id="startBtn" onclick="startCamera()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21"/></svg>
+            Start Detection
+          </button>
+          <button class="btn btn-line" id="stopBtn" onclick="stopCamera()" disabled>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            Stop
+          </button>
+        </div>
+      </div>
 
+      <div class="sec" style="animation-delay:.1s">
+        <div class="sec-lbl">Live Analysis</div>
+        <div class="stats-grid">
+          <div class="scard"><div class="scard-lbl">Verdict</div><div class="scard-val" id="sVerdict">—</div></div>
+          <div class="scard"><div class="scard-lbl">Score</div><div class="scard-val" id="sScore">—</div></div>
+          <div class="scard"><div class="scard-lbl">Confidence</div><div class="scard-val" id="sConf">—</div></div>
+          <div class="scard"><div class="scard-lbl">FPS</div><div class="scard-val" id="sFps">—</div></div>
+        </div>
+        <div class="conf-head"><span>Confidence</span><span id="confPct">—</span></div>
+        <div class="conf-track"><div class="conf-fill" id="confFill"></div></div>
+      </div>
+
+      <div class="sec" style="animation-delay:.15s">
+        <div class="sec-lbl">Fake Probability · Live</div>
+        <div class="chart-wrap"><canvas id="probChart"></canvas></div>
+      </div>
+
+      <div class="sec" style="animation-delay:.2s">
+        <div class="sec-lbl">Artifact Snapshot</div>
+        <div class="attn-row">
+          <div class="attn-thumb" id="attnThumb">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,.15)" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          </div>
+          <p class="attn-text" id="attnText">Frame snapshot and artifact analysis will appear here during detection.</p>
+        </div>
+      </div>
+
+      <div class="sec" style="animation-delay:.25s">
+        <div class="sec-lbl">Static Image Upload</div>
+        <label class="upload-zone" for="uploadInput">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="margin-bottom:6px;display:block;margin-left:auto;margin-right:auto;opacity:.4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Drop an image or click to upload
+        </label>
+        <input type="file" id="uploadInput" accept="image/*" style="display:none"/>
+      </div>
+
+      <div class="pane-foot">
+        <span>DeepSight · Real-time Detection</span>
+        <button class="share-btn" onclick="saveResult()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Save Result
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="detector">
-
-<div class="video-box">
-
-<video id="video" autoplay muted playsinline></video>
-
-<div class="scan-line"></div>
-
+<!-- Sidebar -->
+<div id="sidebar">
+  <button class="sb-close" onclick="toggleSidebar()">✕</button>
+  <div class="sb-title">About DeepSight</div>
+  <p class="sb-body">DeepSight is a real-time deepfake detection system powered by a MobileNetV3 neural network with CBAM attention layers, trained to distinguish authentic faces from AI-generated or screen-reproduced media.</p>
+  <p class="sb-body">Every frame is analyzed using a combination of model confidence and image artifact signals — sharpness variance and RGB channel correlation — to reliably separate real faces from phone screen replays.</p>
+  <p class="sb-body" style="margin-bottom:28px">Version 1.0 · Built with TensorFlow, Flask &amp; care.</p>
+  <a class="sb-link" href="https://github.com/Arijit123789/deepsight" target="_blank">
+    GitHub Repository
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+  </a>
 </div>
 
-<div class="panel">
-
-<div class="controls">
-
-<button class="start" onclick="startCamera()">Start</button>
-
-<button class="stop" onclick="stopCamera()">Stop</button>
-
-<input type="file" id="uploadInput">
-
-<button onclick="saveResult()">Share</button>
-
-</div>
-
-<div class="result" id="result">
-
-Press Start Detection
-
-</div>
-
-<h3>Artifact Visualization</h3>
-
-<div class="attention">
-
-<img id="attentionMap">
-
-</div>
-
-<h3>Fake Probability</h3>
-
-<canvas id="probChart"></canvas>
-
-</div>
-
-</div>
-
-<div class="footer">
-
-DeepSight • Real-time deepfake detection
-
-</div>
-
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
-
-/* ENTER APP */
+// Cursor & spotlight
+const cursor=document.getElementById('cursor'),ring=document.getElementById('cursor-ring'),spot=document.getElementById('spotlight');
+document.addEventListener('mousemove',e=>{
+  const x=e.clientX,y=e.clientY;
+  cursor.style.cssText+=`;left:${x}px;top:${y}px`;
+  ring.style.cssText+=`;left:${x}px;top:${y}px`;
+  spot.style.left=x+'px';spot.style.top=y+'px';
+});
+document.querySelectorAll('.l-btn').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{cursor.style.width='18px';cursor.style.height='18px';ring.style.width='56px';ring.style.height='56px'});
+  el.addEventListener('mouseleave',()=>{cursor.style.width='10px';cursor.style.height='10px';ring.style.width='36px';ring.style.height='36px'});
+});
 
 function enterApp(){
-
-document.getElementById("landing").style.opacity=0
-
-setTimeout(()=>{
-
-document.getElementById("landing").style.display="none"
-
-document.getElementById("app").style.display="block"
-
-},600)
-
+  const l=document.getElementById('landing');
+  l.style.opacity='0';
+  setTimeout(()=>{
+    l.style.display='none';
+    cursor.style.display='none';ring.style.display='none';
+    document.getElementById('app').style.display='block';
+  },800);
 }
 
-/* MENU */
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open')}
 
-function toggleMenu(){
+// Chart
+const chartCtx=document.getElementById('probChart').getContext('2d');
+const chart=new Chart(chartCtx,{
+  type:'line',
+  data:{
+    labels:Array(40).fill(''),
+    datasets:[{
+      data:Array(40).fill(null),
+      borderColor:'#B8965A',borderWidth:1.5,
+      pointRadius:0,tension:.4,fill:true,
+      backgroundColor:'rgba(184,150,90,0.07)'
+    }]
+  },
+  options:{
+    animation:false,responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{enabled:false}},
+    scales:{
+      x:{display:false},
+      y:{min:0,max:1,grid:{color:'rgba(0,0,0,0.04)'},border:{display:false},
+        ticks:{count:3,font:{family:'Syne',size:10},color:'rgba(0,0,0,0.28)',callback:v=>Math.round(v*100)+'%'}}
+    }
+  }
+});
 
-const menu=document.getElementById("menu")
-
-menu.classList.toggle("open")
-
+function pushChart(v){
+  chart.data.datasets[0].data.push(v);
+  if(chart.data.datasets[0].data.length>40)chart.data.datasets[0].data.shift();
+  chart.update('none');
 }
 
-document.addEventListener("click",function(e){
-
-const menu=document.getElementById("menu")
-const btn=document.querySelector(".menu-btn")
-
-if(menu.classList.contains("open")){
-
-if(!menu.contains(e.target) && !btn.contains(e.target)){
-
-menu.classList.remove("open")
-
-}
-
-}
-
-})
-
-/* CAMERA */
-
-let stream=null
-let detecting=false
+// Camera
+let stream=null,detecting=false,rafId=null,lastSend=0,frameCount=0,fpsTimer=0,busy=false;
 
 async function startCamera(){
-
-stream=await navigator.mediaDevices.getUserMedia({video:true})
-
-const video=document.getElementById("video")
-
-video.srcObject=stream
-
-detecting=true
-
-detectLoop()
-
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    const v=document.getElementById('video');
+    v.srcObject=stream;await v.play();v.classList.add('live');
+    document.getElementById('camIdle').classList.add('hidden');
+    document.getElementById('scanBeam').classList.add('on');
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('stopBtn').disabled=false;
+    setStatus('Detecting','live');
+    detecting=true;frameCount=0;fpsTimer=performance.now();
+    rafId=requestAnimationFrame(loop);
+  }catch(e){setStatus('Camera error','');console.error(e)}
 }
 
 function stopCamera(){
-
-detecting=false
-
-if(stream){
-
-stream.getTracks().forEach(t=>t.stop())
-
+  detecting=false;
+  if(rafId)cancelAnimationFrame(rafId);
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  const v=document.getElementById('video');v.srcObject=null;v.classList.remove('live');
+  document.getElementById('camIdle').classList.remove('hidden');
+  document.getElementById('scanBeam').classList.remove('on');
+  document.getElementById('vOverlay').classList.remove('show');
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('stopBtn').disabled=true;
+  document.getElementById('camPane').className='cam-pane';
+  setStatus('Ready','');clearStats();
 }
 
+function loop(now){
+  if(!detecting)return;
+  frameCount++;
+  if(now-fpsTimer>=1000){
+    document.getElementById('sFps').textContent=Math.round((frameCount*1000)/(now-fpsTimer));
+    frameCount=0;fpsTimer=now;
+  }
+  if(!busy&&now-lastSend>=600){lastSend=now;sendFrame()}
+  rafId=requestAnimationFrame(loop);
 }
 
-/* DETECTION */
-
-async function detectLoop(){
-
-if(!detecting) return
-
-const video=document.getElementById("video")
-
-const canvas=document.createElement("canvas")
-
-canvas.width=192
-canvas.height=192
-
-const ctx=canvas.getContext("2d")
-
-ctx.drawImage(video,0,0,192,192)
-
-const image=canvas.toDataURL("image/jpeg")
-
-const res=await fetch("/predict",{
-
-method:"POST",
-
-headers:{"Content-Type":"application/json"},
-
-body:JSON.stringify({image})
-
-})
-
-const data=await res.json()
-
-applyResult(data)
-
-setTimeout(detectLoop,600)
-
+async function sendFrame(){
+  const v=document.getElementById('video'),c=document.getElementById('canvas');
+  if(v.readyState<2)return;
+  busy=true;c.width=c.height=192;
+  const ctx=c.getContext('2d');ctx.save();ctx.scale(-1,1);ctx.drawImage(v,-192,0,192,192);ctx.restore();
+  try{
+    const r=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:c.toDataURL('image/jpeg',.85)})});
+    const d=await r.json();if(d.error)throw d.error;
+    applyResult(d);
+  }catch(e){console.error(e)}finally{busy=false}
 }
 
-/* RESULT */
+function applyResult(d){
+  const{is_fake,label,confidence,score}=d;
+  const cls=is_fake?'fake':'real';
+  const grad=is_fake?'linear-gradient(90deg,var(--fake),#e57368)':'linear-gradient(90deg,var(--real),#52c98a)';
 
-function applyResult(data){
+  document.getElementById('vOverlay').classList.add('show');
+  const vl=document.getElementById('vLabel');vl.textContent=label;vl.className='v-label '+cls;
+  document.getElementById('vConf').textContent=confidence+'% confidence';
+  document.getElementById('camPane').className='cam-pane is-'+cls;
 
-document.getElementById("result").innerText=
+  setStatus(is_fake?'Deepfake Detected':'Live · Authentic',is_fake?'alert':'live');
 
-data.label+" ("+data.confidence+"%)"
+  document.getElementById('confFill').style.cssText+=`;width:${confidence}%;background:${grad}`;
+  document.getElementById('confPct').textContent=confidence+'%';
 
-if(data.attention){
+  const sv=document.getElementById('sVerdict');sv.textContent=is_fake?'Fake':'Real';sv.className='scard-val '+cls;
+  const ss=document.getElementById('sScore');ss.textContent=score.toFixed(3);ss.className='scard-val '+cls;
+  const sc=document.getElementById('sConf');sc.textContent=confidence+'%';sc.className='scard-val '+cls;
 
-document.getElementById("attentionMap").src=
+  pushChart(is_fake?confidence/100:1-confidence/100);
 
-"data:image/jpeg;base64,"+data.attention
+  document.getElementById('attnText').textContent=is_fake
+    ?'Artifacts detected — sharpness and channel anomalies indicate synthesized or screen-mediated content.'
+    :'No significant artifacts. Content appears to originate from a live camera source.';
 
+  const thumb=document.getElementById('attnThumb');
+  const canvas=document.getElementById('canvas');
+  if(canvas.width>0){
+    const img=thumb.querySelector('img')||document.createElement('img');
+    img.src=canvas.toDataURL('image/jpeg',.72);
+    if(!thumb.querySelector('img')){thumb.innerHTML='';thumb.appendChild(img)}
+  }
 }
 
-updateGraph(data.score)
-
+function clearStats(){
+  ['sVerdict','sScore','sConf','sFps'].forEach(id=>{const e=document.getElementById(id);e.textContent='—';e.className='scard-val'});
+  document.getElementById('confFill').style.width='0%';
+  document.getElementById('confPct').textContent='—';
 }
 
-/* GRAPH */
-
-const ctx=document.getElementById("probChart")
-
-const chart=new Chart(ctx,{
-
-type:'line',
-
-data:{
-
-labels:[],
-
-datasets:[{
-
-label:'Fake Probability',
-
-data:[],
-
-borderColor:'#111',
-
-tension:.4
-
-}]
-
-},
-
-options:{animation:false}
-
-})
-
-function updateGraph(score){
-
-chart.data.datasets[0].data.push(score)
-
-if(chart.data.datasets[0].data.length > 40){
-
-chart.data.datasets[0].data.shift()
-
+function setStatus(msg,type){
+  document.getElementById('statusTxt').textContent=msg;
+  document.getElementById('statusPill').className='status-pill'+(type?' '+type:'');
+  document.getElementById('sdot').className='sdot'+(type==='live'||type==='alert'?' pulse':'');
 }
 
-chart.update()
-
-}
-
-/* UPLOAD */
-
-document.getElementById("uploadInput").addEventListener("change",async e=>{
-
-let file=e.target.files[0]
-
-if(!file) return
-
-let form=new FormData()
-
-form.append("image",file)
-
-let res=await fetch("/upload",{method:"POST",body:form})
-
-let data=await res.json()
-
-alert("Result: "+data.label)
-
-})
-
-/* SCREENSHOT */
+document.getElementById('uploadInput').addEventListener('change',async e=>{
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    try{
+      const r=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:ev.target.result})});
+      applyResult(await r.json());
+    }catch(err){console.error(err)}
+  };
+  reader.readAsDataURL(file);
+});
 
 function saveResult(){
-
-html2canvas(document.body).then(canvas=>{
-
-let link=document.createElement("a")
-
-link.download="deepsight-result.png"
-
-link.href=canvas.toDataURL()
-
-link.click()
-
-})
-
+  if(typeof html2canvas==='undefined'){alert('html2canvas not ready');return}
+  html2canvas(document.getElementById('app'),{scale:2}).then(c=>{
+    const a=document.createElement('a');a.download='deepsight.png';a.href=c.toDataURL();a.click();
+  });
 }
-
 </script>
-
 </body>
 </html>
