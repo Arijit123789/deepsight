@@ -4,6 +4,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import base64
 import io
+import cv2
 from PIL import Image
 
 import tensorflow as tf
@@ -14,18 +15,15 @@ from tensorflow.keras.models import Model
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# ══════════════════════════════════════════
-#  CONFIG
-# ══════════════════════════════════════════
 MODEL_PATH = 'deepfake_mobilenetv3_attention.h5'
-IMG_SIZE   = 192
-THRESHOLD  = 0.5   # > 0.5 = FAKE
+IMG_SIZE = 192
+THRESHOLD = 0.5
 
-# ══════════════════════════════════════════
-#  BUILD MODEL ARCHITECTURE + LOAD WEIGHTS
-# ══════════════════════════════════════════
-print("🔧 Building model architecture...")
+print("Building model...")
 
+# ─────────────────────────────────
+# CBAM ATTENTION
+# ─────────────────────────────────
 def cbam_block(input_feature, ratio=8):
     channel = input_feature.shape[-1]
 
@@ -38,126 +36,233 @@ def cbam_block(input_feature, ratio=8):
     max_pool = Dense(channel, activation='sigmoid')(max_pool)
 
     channel_attention = Add()([avg_pool, max_pool])
-    channel_attention = Reshape((1, 1, channel))(channel_attention)
+    channel_attention = Reshape((1,1,channel))(channel_attention)
+
     x = Multiply()([input_feature, channel_attention])
 
     avg_pool = Lambda(lambda z: tf.reduce_mean(z, axis=-1, keepdims=True))(x)
     max_pool = Lambda(lambda z: tf.reduce_max(z, axis=-1, keepdims=True))(x)
-    concat   = Concatenate(axis=-1)([avg_pool, max_pool])
+
+    concat = Concatenate(axis=-1)([avg_pool,max_pool])
 
     spatial_attention = Conv2D(
-        filters=1, kernel_size=7,
-        padding='same', activation='sigmoid'
+        filters=1,
+        kernel_size=7,
+        padding='same',
+        activation='sigmoid'
     )(concat)
 
-    x = Multiply()([x, spatial_attention])
-    return x
+    return Multiply()([x, spatial_attention])
 
+# ─────────────────────────────────
+# MODEL
+# ─────────────────────────────────
 from tensorflow.keras.applications import MobileNetV3Small
-input_tensor = Input(shape=(IMG_SIZE, IMG_SIZE, 3))
-base_model = MobileNetV3Small(weights=None, include_top=False, input_tensor=input_tensor)
-base_model.trainable = True
+
+input_tensor = Input(shape=(IMG_SIZE,IMG_SIZE,3))
+base_model = MobileNetV3Small(
+    weights=None,
+    include_top=False,
+    input_tensor=input_tensor
+)
 
 x = base_model.output
 x = cbam_block(x)
 x = GlobalAveragePooling2D()(x)
 x = BatchNormalization()(x)
-x = Dense(256, activation="relu")(x)
+x = Dense(256,activation="relu")(x)
 x = Dropout(0.4)(x)
-x = Dense(64, activation="relu")(x)
+x = Dense(64,activation="relu")(x)
 x = Dropout(0.3)(x)
-output = Dense(1, activation="sigmoid", dtype="float32")(x)
 
-model = Model(inputs=input_tensor, outputs=output)
+output = Dense(1,activation="sigmoid",dtype="float32")(x)
+
+model = Model(inputs=input_tensor,outputs=output)
 model.load_weights(MODEL_PATH)
-print(f"✅ Model loaded from {MODEL_PATH}")
+
+print("Model loaded")
 
 # Warmup
-dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3), dtype=np.float32)
-model.predict(dummy, verbose=0)
-print("✅ Model warmed up — ready!")
+dummy = np.zeros((1,IMG_SIZE,IMG_SIZE,3),dtype=np.float32)
+model.predict(dummy)
 
-# ══════════════════════════════════════════
-#  FLASK APP
-# ══════════════════════════════════════════
-app = Flask(__name__, static_folder='.', static_url_path='')
+# ─────────────────────────────────
+# FACE DETECTOR
+# ─────────────────────────────────
+face_detector = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+)
+
+# ─────────────────────────────────
+# GRADCAM
+# ─────────────────────────────────
+def gradcam(img_tensor):
+
+    last_conv = None
+
+    for layer in reversed(model.layers):
+        if isinstance(layer, Conv2D):
+            last_conv = layer.name
+            break
+
+    grad_model = tf.keras.models.Model(
+        model.inputs,
+        [model.get_layer(last_conv).output, model.output]
+    )
+
+    with tf.GradientTape() as tape:
+
+        conv_outputs, predictions = grad_model(img_tensor)
+
+        loss = predictions[:,0]
+
+    grads = tape.gradient(loss, conv_outputs)
+
+    pooled_grads = tf.reduce_mean(grads,axis=(0,1,2))
+
+    conv_outputs = conv_outputs[0]
+
+    heatmap = conv_outputs @ pooled_grads[...,tf.newaxis]
+
+    heatmap = tf.squeeze(heatmap)
+
+    heatmap = tf.maximum(heatmap,0) / tf.math.reduce_max(heatmap)
+
+    return heatmap.numpy()
+
+# ─────────────────────────────────
+# FLASK
+# ─────────────────────────────────
+app = Flask(__name__,static_folder='.',static_url_path='')
 CORS(app)
 
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
 
-@app.route('/predict', methods=['POST'])
+# ─────────────────────────────────
+# PREDICT
+# ─────────────────────────────────
+@app.route('/predict',methods=['POST'])
 def predict():
+
     try:
-        data  = request.json
-        img_b64 = data['image'].split(',')[1]  # strip "data:image/jpeg;base64,"
+
+        data = request.json
+
+        img_b64 = data['image'].split(',')[1]
+
         img_bytes = base64.b64decode(img_b64)
+
         img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
-        img = img.resize((IMG_SIZE, IMG_SIZE))
 
-        arr = np.array(img, dtype=np.float32)
+        frame = np.array(img)
 
-        # ── Screen artifact signals ──
-        gray = np.mean(arr, axis=2)
+        gray = cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY)
 
-        # Sharpness via Laplacian variance (blurry screen = low value)
-        def lap_var(g):
-            k = np.array([[0,1,0],[1,-4,1],[0,1,0]], dtype=np.float32)
-            pad = np.pad(g, 1, mode='reflect')
-            out = np.zeros_like(g)
-            for i in range(g.shape[0]):
-                for j in range(g.shape[1]):
-                    out[i,j] = np.sum(pad[i:i+3, j:j+3] * k)
-            return float(np.var(out))
+        faces = face_detector.detectMultiScale(gray,1.3,5)
 
-        # Fast approximate sharpness using numpy gradients
-        gy, gx = np.gradient(gray)
+        if len(faces)==0:
+            face = frame
+            bbox = None
+        else:
+            x,y,w,h = faces[0]
+            face = frame[y:y+h,x:x+w]
+            bbox = [int(x),int(y),int(w),int(h)]
+
+        face = cv2.resize(face,(IMG_SIZE,IMG_SIZE))
+
+        arr = np.array(face,dtype=np.float32)
+
+        # ── Sharpness heuristic
+        gy,gx = np.gradient(np.mean(arr,axis=2))
         sharpness = float(np.mean(gx**2 + gy**2))
 
-        # Channel correlation (phone screen has different RGB balance)
-        r, g, b = arr[:,:,0], arr[:,:,1], arr[:,:,2]
-        rg = float(np.corrcoef(r.flatten(), g.flatten())[0,1])
-        rb = float(np.corrcoef(r.flatten(), b.flatten())[0,1])
-        avg_corr = (rg + rb) / 2.0
-
-        # ── Model prediction ──
         arr_model = preprocess_input(arr.copy())
-        arr_model = np.expand_dims(arr_model, axis=0)
-        raw_score = float(model.predict(arr_model, verbose=0)[0][0])
+        arr_model = np.expand_dims(arr_model,axis=0)
 
-        print(f"Score: {raw_score:.4f} | Sharpness: {sharpness:.2f} | CorrRGB: {avg_corr:.3f}")
+        raw_score = float(model.predict(arr_model)[0][0])
 
-        # ── Decision logic based on observed data ──
-        # Real face:    Sharpness 60–150,  CorrRGB 0.96–0.99, Score 0.95–1.00
-        # Phone screen: Sharpness 370–560, CorrRGB 0.90–0.97, Score 0.55–0.99
-        #
-        # Best separator: Sharpness alone > 280 reliably = phone screen
-
+        # Decision logic
         if sharpness > 280:
-            # High sharpness = emitted light from screen = FAKE
-            is_fake    = True
-            confidence = min(0.99, 0.65 + (sharpness - 280) / 1000.0)
+            is_fake = True
+            confidence = min(0.99,0.65+(sharpness-280)/1000)
         elif sharpness < 200 and raw_score > 0.75:
-            # Low sharpness + high model score = real face
-            is_fake    = False
+            is_fake = False
             confidence = raw_score
         else:
-            # Ambiguous zone — trust model score with flipped label
-            is_fake    = raw_score < THRESHOLD
-            confidence = (1.0 - raw_score) if is_fake else raw_score
+            is_fake = raw_score < THRESHOLD
+            confidence = (1.0-raw_score) if is_fake else raw_score
+
+        # ── GradCAM
+        heatmap = gradcam(arr_model)
+
+        heatmap = cv2.resize(heatmap,(IMG_SIZE,IMG_SIZE))
+
+        heatmap = np.uint8(255 * heatmap)
+
+        heatmap = cv2.applyColorMap(heatmap,cv2.COLORMAP_JET)
+
+        overlay = cv2.addWeighted(face,0.6,heatmap,0.4,0)
+
+        _,buffer = cv2.imencode('.jpg',overlay)
+
+        heatmap_b64 = base64.b64encode(buffer).decode()
 
         return jsonify({
-            'score':      round(raw_score, 4),
-            'is_fake':    bool(is_fake),
-            'label':      'DEEPFAKE' if is_fake else 'REAL',
-            'confidence': round(float(confidence) * 100, 1),
-            'sharpness':  round(sharpness, 1)
+
+            "score": round(raw_score,4),
+
+            "label": "DEEPFAKE" if is_fake else "REAL",
+
+            "is_fake": bool(is_fake),
+
+            "confidence": round(float(confidence)*100,1),
+
+            "sharpness": round(sharpness,1),
+
+            "bbox": bbox,
+
+            "attention": heatmap_b64
+
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    print("\n🌐 Open: http://localhost:5000\n")
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=False)
+        return jsonify({"error":str(e)}),500
+
+# ─────────────────────────────────
+# IMAGE UPLOAD
+# ─────────────────────────────────
+@app.route('/upload',methods=['POST'])
+def upload():
+
+    file = request.files['image']
+
+    img = Image.open(file).convert('RGB')
+
+    img = img.resize((IMG_SIZE,IMG_SIZE))
+
+    arr = np.array(img)
+
+    arr = preprocess_input(arr)
+
+    arr = np.expand_dims(arr,0)
+
+    score = float(model.predict(arr)[0][0])
+
+    return jsonify({
+
+        "score":score,
+
+        "label":"DEEPFAKE" if score>0.5 else "REAL"
+
+    })
+
+# ─────────────────────────────────
+
+if __name__ == "__main__":
+
+    print("Server started")
+
+    app.run(host="0.0.0.0",port=5000,debug=False,threaded=False)
