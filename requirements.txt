@@ -1,7 +1,8 @@
+cat > requirements.txt << 'EOF'
 flask
 flask-cors
-numpy
 pillow
-tensorflow==2.15.0
-opencv-python-headless
+numpy
+tensorflow-cpu==2.13.0
 gunicorn
+EOF
