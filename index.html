@@ -13,12 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
 
-<!-- Lenis smooth scroll -->
-<script src="https://unpkg.com/@studio-freight/lenis@1.0.42/bundled/lenis.min.js"></script>
-
 <style>
-
-/* ---------- RESET ---------- */
 
 *{
 margin:0;
@@ -27,406 +22,234 @@ box-sizing:border-box;
 }
 
 body{
-
 font-family:'DM Sans',sans-serif;
-
-background:linear-gradient(180deg,#f4f3ef 0%,#e8e5dc 100%);
-
+background:linear-gradient(180deg,#f4f3ef 0%,#e6e3d9 100%);
 color:#111;
-
 overflow-x:hidden;
-
 }
 
-/* ---------- LANDING ---------- */
+/* LANDING */
 
 #landing{
-
 position:fixed;
 inset:0;
-
-background:#0b0b0b;
-
+background:#0c0c0c;
 display:flex;
 align-items:center;
 justify-content:center;
-
 color:white;
-
 z-index:100;
-
+transition:.6s;
 }
 
 .hero{
-
 text-align:center;
-
-z-index:3;
-
 }
 
 .hero h1{
-
 font-family:'DM Serif Display',serif;
-
 font-size:3.4rem;
-
-margin-bottom:24px;
-
-}
-
-.hero p{
-
-opacity:.6;
-
-margin-bottom:28px;
-
+margin-bottom:20px;
 }
 
 .hero button{
-
 padding:14px 30px;
-
 border-radius:40px;
-
 border:none;
-
 background:white;
-
 cursor:pointer;
-
 font-weight:500;
-
 transition:.25s;
-
 }
 
 .hero button:hover{
-
 transform:translateY(-2px);
-
-box-shadow:0 10px 20px rgba(0,0,0,0.2);
-
+box-shadow:0 10px 20px rgba(0,0,0,.35);
 }
 
-/* spotlight */
-
-#spotlight{
-
-position:absolute;
-
-width:420px;
-height:420px;
-
-border-radius:50%;
-
-background:radial-gradient(circle,
-rgba(255,255,255,0.16),
-transparent 70%);
-
-pointer-events:none;
-
-mix-blend-mode:screen;
-
-}
-
-/* ---------- APP ---------- */
+/* APP */
 
 #app{
-
-display:none;
-
 max-width:1200px;
-
 margin:auto;
-
-padding:40px 30px;
-
+padding:40px;
+display:none;
 }
 
-/* ---------- HEADER ---------- */
+/* HEADER */
 
 .header{
-
 display:flex;
-
 justify-content:space-between;
-
 align-items:center;
-
 margin-bottom:30px;
-
 }
 
 .logo{
-
 font-family:'DM Serif Display',serif;
-
 font-size:1.7rem;
-
 }
 
 .menu-btn{
-
-font-size:28px;
-
+font-size:26px;
 cursor:pointer;
-
 }
 
-/* ---------- MENU ---------- */
+/* MENU */
 
 #menu{
-
 position:fixed;
-
 top:0;
-
-right:-360px;
-
-width:360px;
-
+right:-340px;
+width:340px;
 height:100%;
-
 background:white;
-
 padding:50px 40px;
-
-box-shadow:-20px 0 60px rgba(0,0,0,0.2);
-
-transition:.4s;
-
-z-index:50;
-
+box-shadow:-20px 0 60px rgba(0,0,0,0.25);
+transition:.35s;
+z-index:90;
 }
 
 #menu.open{
-
 right:0;
-
 }
 
 #menu h2{
-
 font-family:'DM Serif Display',serif;
-
 margin-bottom:20px;
-
 }
 
 #menu p{
-
-margin-bottom:16px;
-
+margin-bottom:14px;
 line-height:1.6;
-
 opacity:.75;
-
 }
 
-/* ---------- LAYOUT ---------- */
+/* LAYOUT */
 
 .detector{
-
 display:grid;
-
 grid-template-columns:1.4fr 1fr;
-
 gap:40px;
-
 }
 
-/* ---------- VIDEO ---------- */
+/* VIDEO */
 
 .video-box{
-
 position:relative;
-
 background:black;
-
 border-radius:16px;
-
 overflow:hidden;
-
 aspect-ratio:4/3;
+box-shadow:0 30px 60px rgba(0,0,0,.25);
+}
 
-box-shadow:0 30px 60px rgba(0,0,0,0.3);
-
+.video-box::after{
+content:"";
+position:absolute;
+inset:0;
+border-radius:16px;
+box-shadow:inset 0 0 120px rgba(0,0,0,0.35);
+pointer-events:none;
 }
 
 video{
-
 width:100%;
 height:100%;
-
 object-fit:cover;
-
 transform:scaleX(-1);
-
 }
-
-#faceBox{
-
-position:absolute;
-
-border:2px solid white;
-
-border-radius:6px;
-
-display:none;
-
-}
-
-/* scanning line */
 
 .scan-line{
-
 position:absolute;
-
 left:0;
-
 right:0;
-
 height:2px;
-
 background:linear-gradient(90deg,transparent,white,transparent);
-
 animation:scan 3s infinite;
-
 }
 
 @keyframes scan{
-
 0%{top:0}
-
 100%{top:100%}
-
 }
 
-/* ---------- PANEL ---------- */
+/* PANEL */
 
 .panel{
-
-background:rgba(255,255,255,0.85);
-
-backdrop-filter:blur(12px);
-
+background:rgba(255,255,255,.9);
 border-radius:16px;
-
 padding:26px;
-
-box-shadow:0 25px 60px rgba(0,0,0,0.1);
-
-border:1px solid rgba(0,0,0,0.05);
-
+box-shadow:0 20px 50px rgba(0,0,0,.12);
+border:1px solid rgba(0,0,0,.05);
 }
 
-/* controls */
+/* CONTROLS */
 
 .controls{
-
 display:flex;
-
 gap:10px;
-
 flex-wrap:wrap;
-
 margin-bottom:20px;
-
 }
 
 button{
-
 padding:10px 18px;
-
 border-radius:30px;
-
 border:none;
-
 cursor:pointer;
-
 font-weight:500;
-
 transition:.25s;
-
 }
 
 button:hover{
-
 transform:translateY(-2px);
-
-box-shadow:0 8px 18px rgba(0,0,0,0.15);
-
+box-shadow:0 8px 16px rgba(0,0,0,.15);
 }
 
 .start{
-
 background:#111;
-
 color:white;
-
 }
 
 .stop{
-
 background:#ddd;
-
 }
 
-/* result */
+/* RESULT */
 
 .result{
-
 font-size:22px;
-
 font-family:'DM Serif Display',serif;
-
 margin-bottom:12px;
-
 }
 
-/* heatmap */
+/* HEATMAP */
 
 .attention img{
-
-width:180px;
-
-max-width:100%;
-
+width:160px;
 border-radius:8px;
-
 margin-top:10px;
-
 }
 
-/* graph */
+/* GRAPH */
 
 canvas{
-
 margin-top:12px;
-
 }
 
-/* footer */
+/* FOOTER */
 
 .footer{
-
 margin-top:40px;
-
 opacity:.6;
-
 font-size:.9rem;
-
 }
-
-/* responsive */
 
 @media(max-width:900px){
 
 .detector{
-
 grid-template-columns:1fr;
-
 }
 
 }
@@ -441,17 +264,37 @@ grid-template-columns:1fr;
 
 <div id="landing">
 
-<div id="spotlight"></div>
-
 <div class="hero">
 
 <h1>Are you even real?</h1>
 
-<p>Deepfake detection running live.</p>
-
 <button onclick="enterApp()">Let's check</button>
 
 </div>
+
+</div>
+
+<!-- MENU -->
+
+<div id="menu">
+
+<h2>DeepSight</h2>
+
+<p>
+DeepSight is a real-time deepfake detection system powered by a MobileNetV3 neural network with attention layers.
+</p>
+
+<p>
+It analyzes frames captured from camera or uploaded images and identifies artifacts created by manipulated media.
+</p>
+
+<p>Version 1.0</p>
+
+<p>
+<a href="https://github.com/Arijit123789/deepsight" target="_blank">
+GitHub Repository
+</a>
+</p>
 
 </div>
 
@@ -469,19 +312,13 @@ grid-template-columns:1fr;
 
 <div class="detector">
 
-<!-- VIDEO -->
-
 <div class="video-box">
 
 <video id="video" autoplay muted playsinline></video>
 
-<div id="faceBox"></div>
-
 <div class="scan-line"></div>
 
 </div>
-
-<!-- PANEL -->
 
 <div class="panel">
 
@@ -527,92 +364,37 @@ DeepSight • Real-time deepfake detection
 
 </div>
 
-<!-- MENU -->
-
-<div id="menu">
-
-<h2>DeepSight</h2>
-
-<p>
-
-DeepSight is a real-time deepfake detection system powered by a MobileNetV3 model with attention layers.
-
-</p>
-
-<p>
-
-The system analyzes frames captured from camera or uploaded images and identifies artifacts generated by synthetic media.
-
-</p>
-
-<p>
-
-Version 1.0
-
-</p>
-
-<p>
-
-<a href="https://github.com/Arijit123789/deepsight" target="_blank">
-
-GitHub Repository
-
-</a>
-
-</p>
-
-</div>
-
 <script>
 
-/* ---------- LENIS ---------- */
-
-const lenis = new Lenis()
-
-function raf(time) {
-
-lenis.raf(time)
-
-requestAnimationFrame(raf)
-
-}
-
-requestAnimationFrame(raf)
-
-/* ---------- SPOTLIGHT ---------- */
-
-const spotlight = document.getElementById("spotlight")
-
-document.addEventListener("mousemove", e => {
-
-spotlight.style.left = e.clientX - 200 + "px"
-
-spotlight.style.top = e.clientY - 200 + "px"
-
-})
-
-/* ---------- ENTER APP ---------- */
+/* ENTER APP */
 
 function enterApp(){
+
+document.getElementById("landing").style.opacity=0
+
+setTimeout(()=>{
 
 document.getElementById("landing").style.display="none"
 
 document.getElementById("app").style.display="block"
 
+},600)
+
 }
 
-/* ---------- MENU ---------- */
+/* MENU */
 
 function toggleMenu(){
 
-document.getElementById("menu").classList.toggle("open")
+const menu=document.getElementById("menu")
+
+menu.classList.toggle("open")
 
 }
 
 document.addEventListener("click",function(e){
 
 const menu=document.getElementById("menu")
-
 const btn=document.querySelector(".menu-btn")
 
 if(menu.classList.contains("open")){
@@ -627,10 +409,9 @@ menu.classList.remove("open")
 
 })
 
-/* ---------- DETECTOR ---------- */
+/* CAMERA */
 
 let stream=null
-
 let detecting=false
 
 async function startCamera(){
@@ -659,6 +440,8 @@ stream.getTracks().forEach(t=>t.stop())
 
 }
 
+/* DETECTION */
+
 async function detectLoop(){
 
 if(!detecting) return
@@ -668,7 +451,6 @@ const video=document.getElementById("video")
 const canvas=document.createElement("canvas")
 
 canvas.width=192
-
 canvas.height=192
 
 const ctx=canvas.getContext("2d")
@@ -695,6 +477,8 @@ setTimeout(detectLoop,600)
 
 }
 
+/* RESULT */
+
 function applyResult(data){
 
 document.getElementById("result").innerText=
@@ -713,7 +497,7 @@ updateGraph(data.score)
 
 }
 
-/* ---------- GRAPH ---------- */
+/* GRAPH */
 
 const ctx=document.getElementById("probChart")
 
@@ -747,21 +531,23 @@ function updateGraph(score){
 
 chart.data.datasets[0].data.push(score)
 
-if(chart.data.datasets[0].data.length>40)
+if(chart.data.datasets[0].data.length > 40){
 
 chart.data.datasets[0].data.shift()
+
+}
 
 chart.update()
 
 }
 
-/* ---------- UPLOAD ---------- */
+/* UPLOAD */
 
-document.getElementById("uploadInput")
-
-.addEventListener("change",async e=>{
+document.getElementById("uploadInput").addEventListener("change",async e=>{
 
 let file=e.target.files[0]
+
+if(!file) return
 
 let form=new FormData()
 
@@ -775,7 +561,7 @@ alert("Result: "+data.label)
 
 })
 
-/* ---------- SCREENSHOT ---------- */
+/* SCREENSHOT */
 
 function saveResult(){
 
