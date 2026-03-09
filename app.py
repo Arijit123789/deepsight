@@ -15,25 +15,35 @@ from tensorflow.keras.models import Model
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-MODEL_PATH = 'deepfake_mobilenetv3_attention.h5'
+
+# ─────────────────────────────────
+# CONFIG
+# ─────────────────────────────────
+
+MODEL_PATH = "deepfake_mobilenetv3_attention.h5"
 IMG_SIZE = 192
-THRESHOLD = 0.5
+THRESHOLD = 0.65
+
+# smoothing buffer
+score_buffer = []
 
 print("Building model...")
 
 # ─────────────────────────────────
-# CBAM ATTENTION
+# CBAM ATTENTION BLOCK
 # ─────────────────────────────────
+
 def cbam_block(input_feature, ratio=8):
+
     channel = input_feature.shape[-1]
 
     avg_pool = GlobalAveragePooling2D()(input_feature)
-    avg_pool = Dense(channel // ratio, activation='relu')(avg_pool)
-    avg_pool = Dense(channel, activation='sigmoid')(avg_pool)
+    avg_pool = Dense(channel // ratio, activation="relu")(avg_pool)
+    avg_pool = Dense(channel, activation="sigmoid")(avg_pool)
 
     max_pool = GlobalMaxPooling2D()(input_feature)
-    max_pool = Dense(channel // ratio, activation='relu')(max_pool)
-    max_pool = Dense(channel, activation='sigmoid')(max_pool)
+    max_pool = Dense(channel // ratio, activation="relu")(max_pool)
+    max_pool = Dense(channel, activation="sigmoid")(max_pool)
 
     channel_attention = Add()([avg_pool, max_pool])
     channel_attention = Reshape((1,1,channel))(channel_attention)
@@ -48,18 +58,21 @@ def cbam_block(input_feature, ratio=8):
     spatial_attention = Conv2D(
         filters=1,
         kernel_size=7,
-        padding='same',
-        activation='sigmoid'
+        padding="same",
+        activation="sigmoid"
     )(concat)
 
     return Multiply()([x, spatial_attention])
 
+
 # ─────────────────────────────────
-# MODEL
+# BUILD MODEL
 # ─────────────────────────────────
+
 from tensorflow.keras.applications import MobileNetV3Small
 
 input_tensor = Input(shape=(IMG_SIZE,IMG_SIZE,3))
+
 base_model = MobileNetV3Small(
     weights=None,
     include_top=False,
@@ -68,34 +81,41 @@ base_model = MobileNetV3Small(
 
 x = base_model.output
 x = cbam_block(x)
+
 x = GlobalAveragePooling2D()(x)
 x = BatchNormalization()(x)
-x = Dense(256,activation="relu")(x)
+
+x = Dense(256, activation="relu")(x)
 x = Dropout(0.4)(x)
-x = Dense(64,activation="relu")(x)
+
+x = Dense(64, activation="relu")(x)
 x = Dropout(0.3)(x)
 
-output = Dense(1,activation="sigmoid",dtype="float32")(x)
+output = Dense(1, activation="sigmoid", dtype="float32")(x)
 
-model = Model(inputs=input_tensor,outputs=output)
+model = Model(inputs=input_tensor, outputs=output)
+
 model.load_weights(MODEL_PATH)
 
 print("Model loaded")
 
-# Warmup
-dummy = np.zeros((1,IMG_SIZE,IMG_SIZE,3),dtype=np.float32)
+# warmup
+dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3))
 model.predict(dummy)
 
 # ─────────────────────────────────
 # FACE DETECTOR
 # ─────────────────────────────────
+
 face_detector = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 )
 
+
 # ─────────────────────────────────
-# GRADCAM
+# GRADCAM HEATMAP
 # ─────────────────────────────────
+
 def gradcam(img_tensor):
 
     last_conv = None
@@ -113,16 +133,15 @@ def gradcam(img_tensor):
     with tf.GradientTape() as tape:
 
         conv_outputs, predictions = grad_model(img_tensor)
-
         loss = predictions[:,0]
 
     grads = tape.gradient(loss, conv_outputs)
 
-    pooled_grads = tf.reduce_mean(grads,axis=(0,1,2))
+    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
 
     conv_outputs = conv_outputs[0]
 
-    heatmap = conv_outputs @ pooled_grads[...,tf.newaxis]
+    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
 
     heatmap = tf.squeeze(heatmap)
 
@@ -130,99 +149,112 @@ def gradcam(img_tensor):
 
     return heatmap.numpy()
 
+
 # ─────────────────────────────────
 # FLASK
 # ─────────────────────────────────
-app = Flask(__name__,static_folder='.',static_url_path='')
+
+app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
-@app.route('/')
+
+@app.route("/")
 def index():
-    return app.send_static_file('index.html')
+    return app.send_static_file("index.html")
+
 
 # ─────────────────────────────────
-# PREDICT
+# PREDICT API
 # ─────────────────────────────────
-@app.route('/predict',methods=['POST'])
+
+@app.route("/predict", methods=["POST"])
 def predict():
+
+    global score_buffer
 
     try:
 
         data = request.json
 
-        img_b64 = data['image'].split(',')[1]
+        img_b64 = data["image"].split(",")[1]
 
         img_bytes = base64.b64decode(img_b64)
 
-        img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
         frame = np.array(img)
 
-        gray = cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY)
+        gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
 
-        faces = face_detector.detectMultiScale(gray,1.3,5)
+        faces = face_detector.detectMultiScale(gray, 1.3, 5)
 
-        if len(faces)==0:
+        if len(faces) == 0:
+
             face = frame
             bbox = None
+
         else:
+
             x,y,w,h = faces[0]
-            face = frame[y:y+h,x:x+w]
+
+            pad = int(0.2*w)
+
+            x1 = max(0, x-pad)
+            y1 = max(0, y-pad)
+            x2 = min(frame.shape[1], x+w+pad)
+            y2 = min(frame.shape[0], y+h+pad)
+
+            face = frame[y1:y2, x1:x2]
+
             bbox = [int(x),int(y),int(w),int(h)]
+
+        # lighting normalization
+        face = cv2.cvtColor(face, cv2.COLOR_RGB2YCrCb)
+        face[:,:,0] = cv2.equalizeHist(face[:,:,0])
+        face = cv2.cvtColor(face, cv2.COLOR_YCrCb2RGB)
 
         face = cv2.resize(face,(IMG_SIZE,IMG_SIZE))
 
-        arr = np.array(face,dtype=np.float32)
-
-        # ── Sharpness heuristic
-        gy,gx = np.gradient(np.mean(arr,axis=2))
-        sharpness = float(np.mean(gx**2 + gy**2))
+        arr = np.array(face, dtype=np.float32)
 
         arr_model = preprocess_input(arr.copy())
-        arr_model = np.expand_dims(arr_model,axis=0)
+        arr_model = np.expand_dims(arr_model, axis=0)
 
         raw_score = float(model.predict(arr_model)[0][0])
 
-        # Decision logic
-        if sharpness > 280:
-            is_fake = True
-            confidence = min(0.99,0.65+(sharpness-280)/1000)
-        elif sharpness < 200 and raw_score > 0.75:
-            is_fake = False
-            confidence = raw_score
-        else:
-            is_fake = raw_score < THRESHOLD
-            confidence = (1.0-raw_score) if is_fake else raw_score
+        # temporal smoothing
+        score_buffer.append(raw_score)
 
-        # ── GradCAM
+        if len(score_buffer) > 5:
+            score_buffer.pop(0)
+
+        smooth_score = float(np.mean(score_buffer))
+
+        is_fake = smooth_score > THRESHOLD
+
+        confidence = smooth_score if not is_fake else (1 - smooth_score)
+
+        # GradCAM heatmap
         heatmap = gradcam(arr_model)
 
         heatmap = cv2.resize(heatmap,(IMG_SIZE,IMG_SIZE))
-
         heatmap = np.uint8(255 * heatmap)
 
-        heatmap = cv2.applyColorMap(heatmap,cv2.COLORMAP_JET)
+        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
         overlay = cv2.addWeighted(face,0.6,heatmap,0.4,0)
 
-        _,buffer = cv2.imencode('.jpg',overlay)
+        _,buffer = cv2.imencode(".jpg",overlay)
 
         heatmap_b64 = base64.b64encode(buffer).decode()
 
         return jsonify({
 
-            "score": round(raw_score,4),
-
+            "score": round(smooth_score,4),
             "label": "DEEPFAKE" if is_fake else "REAL",
-
             "is_fake": bool(is_fake),
-
-            "confidence": round(float(confidence)*100,1),
-
-            "sharpness": round(sharpness,1),
-
+            "confidence": round(confidence*100,1),
             "bbox": bbox,
-
             "attention": heatmap_b64
 
         })
@@ -231,15 +263,17 @@ def predict():
 
         return jsonify({"error":str(e)}),500
 
+
 # ─────────────────────────────────
 # IMAGE UPLOAD
 # ─────────────────────────────────
-@app.route('/upload',methods=['POST'])
+
+@app.route("/upload", methods=["POST"])
 def upload():
 
-    file = request.files['image']
+    file = request.files["image"]
 
-    img = Image.open(file).convert('RGB')
+    img = Image.open(file).convert("RGB")
 
     img = img.resize((IMG_SIZE,IMG_SIZE))
 
@@ -251,13 +285,15 @@ def upload():
 
     score = float(model.predict(arr)[0][0])
 
+    is_fake = score > THRESHOLD
+
     return jsonify({
 
-        "score":score,
-
-        "label":"DEEPFAKE" if score>0.5 else "REAL"
+        "score": score,
+        "label": "DEEPFAKE" if is_fake else "REAL"
 
     })
+
 
 # ─────────────────────────────────
 
@@ -265,4 +301,9 @@ if __name__ == "__main__":
 
     print("Server started")
 
-    app.run(host="0.0.0.0",port=5000,debug=False,threaded=False)
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False,
+        threaded=False
+    )
