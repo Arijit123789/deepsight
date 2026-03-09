@@ -10,6 +10,7 @@ import tensorflow as tf
 from tensorflow.keras.applications.mobilenet_v3 import preprocess_input
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Model
+from tensorflow.keras.applications import MobileNetV3Small
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -20,11 +21,9 @@ THRESHOLD = 0.65
 
 print("Loading model...")
 
-# ----------------------------
+# -----------------------------
 # MODEL
-# ----------------------------
-
-from tensorflow.keras.applications import MobileNetV3Small
+# -----------------------------
 
 input_tensor = Input(shape=(IMG_SIZE, IMG_SIZE, 3))
 
@@ -46,9 +45,9 @@ model.load_weights(MODEL_PATH)
 
 print("Model loaded")
 
-# ----------------------------
-# FLASK
-# ----------------------------
+# -----------------------------
+# FLASK APP
+# -----------------------------
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
@@ -57,9 +56,10 @@ CORS(app)
 def index():
     return app.send_static_file("index.html")
 
-# ----------------------------
-# PREDICT
-# ----------------------------
+
+# -----------------------------
+# PREDICTION API
+# -----------------------------
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -72,11 +72,9 @@ def predict():
         img_bytes = base64.b64decode(img_b64)
 
         img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-
         img = img.resize((IMG_SIZE, IMG_SIZE))
 
         arr = np.array(img).astype(np.float32)
-
         arr = preprocess_input(arr)
 
         arr = np.expand_dims(arr, axis=0)
@@ -84,27 +82,22 @@ def predict():
         score = float(model.predict(arr)[0][0])
 
         is_fake = score > THRESHOLD
-
         confidence = score if not is_fake else (1 - score)
 
         return jsonify({
-
             "score": score,
             "label": "DEEPFAKE" if is_fake else "REAL",
             "is_fake": bool(is_fake),
             "confidence": round(confidence * 100, 2)
-
         })
 
     except Exception as e:
-
         return jsonify({"error": str(e)}), 500
 
 
-# ----------------------------
+# -----------------------------
 
 if __name__ == "__main__":
-
     print("Server started")
 
     app.run(
