@@ -15,287 +15,167 @@ from tensorflow.keras.models import Model
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-
-# ─────────────────────────────────
-# CONFIG
-# ─────────────────────────────────
+import mediapipe as mp
 
 MODEL_PATH = "deepfake_mobilenetv3_attention.h5"
 IMG_SIZE = 192
 THRESHOLD = 0.65
 
-# smoothing buffer
-score_buffer = []
+print("Loading model...")
 
-print("Building model...")
-
-# ─────────────────────────────────
-# CBAM ATTENTION BLOCK
-# ─────────────────────────────────
-
-def cbam_block(input_feature, ratio=8):
-
-    channel = input_feature.shape[-1]
-
-    avg_pool = GlobalAveragePooling2D()(input_feature)
-    avg_pool = Dense(channel // ratio, activation="relu")(avg_pool)
-    avg_pool = Dense(channel, activation="sigmoid")(avg_pool)
-
-    max_pool = GlobalMaxPooling2D()(input_feature)
-    max_pool = Dense(channel // ratio, activation="relu")(max_pool)
-    max_pool = Dense(channel, activation="sigmoid")(max_pool)
-
-    channel_attention = Add()([avg_pool, max_pool])
-    channel_attention = Reshape((1,1,channel))(channel_attention)
-
-    x = Multiply()([input_feature, channel_attention])
-
-    avg_pool = Lambda(lambda z: tf.reduce_mean(z, axis=-1, keepdims=True))(x)
-    max_pool = Lambda(lambda z: tf.reduce_max(z, axis=-1, keepdims=True))(x)
-
-    concat = Concatenate(axis=-1)([avg_pool,max_pool])
-
-    spatial_attention = Conv2D(
-        filters=1,
-        kernel_size=7,
-        padding="same",
-        activation="sigmoid"
-    )(concat)
-
-    return Multiply()([x, spatial_attention])
-
-
-# ─────────────────────────────────
-# BUILD MODEL
-# ─────────────────────────────────
+# ----------------------------
+# MODEL
+# ----------------------------
 
 from tensorflow.keras.applications import MobileNetV3Small
 
-input_tensor = Input(shape=(IMG_SIZE,IMG_SIZE,3))
-
-base_model = MobileNetV3Small(
-    weights=None,
-    include_top=False,
-    input_tensor=input_tensor
-)
+input_tensor = Input(shape=(IMG_SIZE, IMG_SIZE, 3))
+base_model = MobileNetV3Small(weights=None, include_top=False, input_tensor=input_tensor)
 
 x = base_model.output
-x = cbam_block(x)
-
 x = GlobalAveragePooling2D()(x)
-x = BatchNormalization()(x)
-
-x = Dense(256, activation="relu")(x)
+x = Dense(128, activation="relu")(x)
 x = Dropout(0.4)(x)
-
-x = Dense(64, activation="relu")(x)
-x = Dropout(0.3)(x)
-
-output = Dense(1, activation="sigmoid", dtype="float32")(x)
+output = Dense(1, activation="sigmoid")(x)
 
 model = Model(inputs=input_tensor, outputs=output)
-
 model.load_weights(MODEL_PATH)
 
 print("Model loaded")
 
-# warmup
-dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3))
-model.predict(dummy)
+# ----------------------------
+# FACE + EYE LANDMARKS
+# ----------------------------
 
-# ─────────────────────────────────
-# FACE DETECTOR
-# ─────────────────────────────────
+mp_face_mesh = mp.solutions.face_mesh
 
-face_detector = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=False,
+    max_num_faces=1,
+    refine_landmarks=True
 )
 
+# EAR landmarks
+LEFT_EYE = [33, 160, 158, 133, 153, 144]
+RIGHT_EYE = [362, 385, 387, 263, 373, 380]
 
-# ─────────────────────────────────
-# GRADCAM HEATMAP
-# ─────────────────────────────────
+blink_counter = 0
+blink_state = False
 
-def gradcam(img_tensor):
+def eye_aspect_ratio(landmarks, eye_indices, frame_w, frame_h):
 
-    last_conv = None
+    points = []
 
-    for layer in reversed(model.layers):
-        if isinstance(layer, Conv2D):
-            last_conv = layer.name
-            break
+    for i in eye_indices:
+        x = int(landmarks[i].x * frame_w)
+        y = int(landmarks[i].y * frame_h)
+        points.append((x, y))
 
-    grad_model = tf.keras.models.Model(
-        model.inputs,
-        [model.get_layer(last_conv).output, model.output]
-    )
+    p2_p6 = np.linalg.norm(np.array(points[1]) - np.array(points[5]))
+    p3_p5 = np.linalg.norm(np.array(points[2]) - np.array(points[4]))
+    p1_p4 = np.linalg.norm(np.array(points[0]) - np.array(points[3]))
 
-    with tf.GradientTape() as tape:
+    ear = (p2_p6 + p3_p5) / (2.0 * p1_p4)
 
-        conv_outputs, predictions = grad_model(img_tensor)
-        loss = predictions[:,0]
+    return ear
 
-    grads = tape.gradient(loss, conv_outputs)
-
-    pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))
-
-    conv_outputs = conv_outputs[0]
-
-    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
-
-    heatmap = tf.squeeze(heatmap)
-
-    heatmap = tf.maximum(heatmap,0) / tf.math.reduce_max(heatmap)
-
-    return heatmap.numpy()
-
-
-# ─────────────────────────────────
+# ----------------------------
 # FLASK
-# ─────────────────────────────────
+# ----------------------------
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
-
 
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
 
-
-# ─────────────────────────────────
-# PREDICT API
-# ─────────────────────────────────
+# ----------------------------
+# PREDICT
+# ----------------------------
 
 @app.route("/predict", methods=["POST"])
 def predict():
 
-    global score_buffer
+    global blink_counter
+    global blink_state
 
     try:
 
         data = request.json
 
         img_b64 = data["image"].split(",")[1]
-
         img_bytes = base64.b64decode(img_b64)
 
         img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-
         frame = np.array(img)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        h, w, _ = frame.shape
 
-        faces = face_detector.detectMultiScale(gray, 1.3, 5)
+        # ------------------
+        # BLINK DETECTION
+        # ------------------
 
-        if len(faces) == 0:
+        results = face_mesh.process(frame)
 
-            face = frame
-            bbox = None
+        blink_detected = False
 
-        else:
+        if results.multi_face_landmarks:
 
-            x,y,w,h = faces[0]
+            landmarks = results.multi_face_landmarks[0].landmark
 
-            pad = int(0.2*w)
+            leftEAR = eye_aspect_ratio(landmarks, LEFT_EYE, w, h)
+            rightEAR = eye_aspect_ratio(landmarks, RIGHT_EYE, w, h)
 
-            x1 = max(0, x-pad)
-            y1 = max(0, y-pad)
-            x2 = min(frame.shape[1], x+w+pad)
-            y2 = min(frame.shape[0], y+h+pad)
+            ear = (leftEAR + rightEAR) / 2.0
 
-            face = frame[y1:y2, x1:x2]
+            if ear < 0.21:
+                if not blink_state:
+                    blink_counter += 1
+                    blink_state = True
+                    blink_detected = True
+            else:
+                blink_state = False
 
-            bbox = [int(x),int(y),int(w),int(h)]
+        # ------------------
+        # MODEL PREDICTION
+        # ------------------
 
-        # lighting normalization
-        face = cv2.cvtColor(face, cv2.COLOR_RGB2YCrCb)
-        face[:,:,0] = cv2.equalizeHist(face[:,:,0])
-        face = cv2.cvtColor(face, cv2.COLOR_YCrCb2RGB)
+        face = cv2.resize(frame, (IMG_SIZE, IMG_SIZE))
 
-        face = cv2.resize(face,(IMG_SIZE,IMG_SIZE))
+        arr = preprocess_input(face.astype(np.float32))
+        arr = np.expand_dims(arr, axis=0)
 
-        arr = np.array(face, dtype=np.float32)
+        raw_score = float(model.predict(arr)[0][0])
 
-        arr_model = preprocess_input(arr.copy())
-        arr_model = np.expand_dims(arr_model, axis=0)
+        is_fake = raw_score > THRESHOLD
+        confidence = raw_score if not is_fake else (1 - raw_score)
 
-        raw_score = float(model.predict(arr_model)[0][0])
+        # ------------------
+        # BLINK LOGIC
+        # ------------------
 
-        # temporal smoothing
-        score_buffer.append(raw_score)
-
-        if len(score_buffer) > 5:
-            score_buffer.pop(0)
-
-        smooth_score = float(np.mean(score_buffer))
-
-        is_fake = smooth_score > THRESHOLD
-
-        confidence = smooth_score if not is_fake else (1 - smooth_score)
-
-        # GradCAM heatmap
-        heatmap = gradcam(arr_model)
-
-        heatmap = cv2.resize(heatmap,(IMG_SIZE,IMG_SIZE))
-        heatmap = np.uint8(255 * heatmap)
-
-        heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-
-        overlay = cv2.addWeighted(face,0.6,heatmap,0.4,0)
-
-        _,buffer = cv2.imencode(".jpg",overlay)
-
-        heatmap_b64 = base64.b64encode(buffer).decode()
+        if blink_counter >= 2:
+            # real humans blink
+            confidence += 0.1
+            is_fake = False
 
         return jsonify({
 
-            "score": round(smooth_score,4),
+            "score": raw_score,
             "label": "DEEPFAKE" if is_fake else "REAL",
             "is_fake": bool(is_fake),
-            "confidence": round(confidence*100,1),
-            "bbox": bbox,
-            "attention": heatmap_b64
+            "confidence": round(confidence * 100, 2),
+            "blinks": blink_counter,
+            "blink_detected": blink_detected
 
         })
 
     except Exception as e:
-
-        return jsonify({"error":str(e)}),500
-
-
-# ─────────────────────────────────
-# IMAGE UPLOAD
-# ─────────────────────────────────
-
-@app.route("/upload", methods=["POST"])
-def upload():
-
-    file = request.files["image"]
-
-    img = Image.open(file).convert("RGB")
-
-    img = img.resize((IMG_SIZE,IMG_SIZE))
-
-    arr = np.array(img)
-
-    arr = preprocess_input(arr)
-
-    arr = np.expand_dims(arr,0)
-
-    score = float(model.predict(arr)[0][0])
-
-    is_fake = score > THRESHOLD
-
-    return jsonify({
-
-        "score": score,
-        "label": "DEEPFAKE" if is_fake else "REAL"
-
-    })
+        return jsonify({"error": str(e)}), 500
 
 
-# ─────────────────────────────────
+# ----------------------------
 
 if __name__ == "__main__":
 
