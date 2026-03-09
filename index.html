@@ -374,6 +374,12 @@ body{font-family:'Syne',sans-serif;color:var(--ink);-webkit-font-smoothing:antia
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
             Stop
           </button>
+          <button class="btn btn-line" id="flipBtn" onclick="flipCamera()" disabled title="Switch camera">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>
+            </svg>
+            Flip
+          </button>
         </div>
       </div>
 
@@ -496,20 +502,41 @@ function pushChart(v){
 
 // Camera
 let stream=null,detecting=false,rafId=null,lastSend=0,frameCount=0,fpsTimer=0,busy=false;
+let currentFacing='user'; // 'user' = front, 'environment' = back
 
-async function startCamera(){
+async function startCamera(facing){
+  facing = facing || currentFacing;
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    // Stop existing stream if any
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:facing,width:{ideal:640},height:{ideal:480}},audio:false
+    });
+    currentFacing=facing;
     const v=document.getElementById('video');
     v.srcObject=stream;await v.play();v.classList.add('live');
+
+    // Mirror only for front camera
+    v.style.transform = facing==='user' ? 'scaleX(-1)' : 'scaleX(1)';
+
     document.getElementById('camIdle').classList.add('hidden');
     document.getElementById('scanBeam').classList.add('on');
     document.getElementById('startBtn').disabled=true;
     document.getElementById('stopBtn').disabled=false;
+    document.getElementById('flipBtn').disabled=false;
     setStatus('Detecting','live');
     detecting=true;frameCount=0;fpsTimer=performance.now();
     rafId=requestAnimationFrame(loop);
   }catch(e){setStatus('Camera error','');console.error(e)}
+}
+
+async function flipCamera(){
+  const newFacing = currentFacing==='user' ? 'environment' : 'user';
+  // Stop current detection loop temporarily
+  detecting=false;
+  if(rafId)cancelAnimationFrame(rafId);
+  await startCamera(newFacing);
 }
 
 function stopCamera(){
@@ -522,6 +549,9 @@ function stopCamera(){
   document.getElementById('vOverlay').classList.remove('show');
   document.getElementById('startBtn').disabled=false;
   document.getElementById('stopBtn').disabled=true;
+  document.getElementById('flipBtn').disabled=true;
+  document.getElementById('video').style.transform='scaleX(-1)';
+  currentFacing='user';
   document.getElementById('camPane').className='cam-pane';
   setStatus('Ready','');clearStats();
 }
