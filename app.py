@@ -1,13 +1,13 @@
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
 import base64
 import io
 import cv2
 from PIL import Image
-
 import tensorflow as tf
+
 from tensorflow.keras.applications.mobilenet_v3 import preprocess_input
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Model
@@ -23,14 +23,18 @@ THRESHOLD = 0.65
 
 print("Loading model...")
 
-# ----------------------------
+# ------------------------
 # MODEL
-# ----------------------------
+# ------------------------
 
 from tensorflow.keras.applications import MobileNetV3Small
 
 input_tensor = Input(shape=(IMG_SIZE, IMG_SIZE, 3))
-base_model = MobileNetV3Small(weights=None, include_top=False, input_tensor=input_tensor)
+base_model = MobileNetV3Small(
+    weights=None,
+    include_top=False,
+    input_tensor=input_tensor
+)
 
 x = base_model.output
 x = GlobalAveragePooling2D()(x)
@@ -43,9 +47,13 @@ model.load_weights(MODEL_PATH)
 
 print("Model loaded")
 
-# ----------------------------
-# FACE + EYE LANDMARKS
-# ----------------------------
+# Warmup
+dummy = np.zeros((1, IMG_SIZE, IMG_SIZE, 3))
+model.predict(dummy)
+
+# ------------------------
+# MEDIAPIPE
+# ------------------------
 
 mp_face_mesh = mp.solutions.face_mesh
 
@@ -55,33 +63,36 @@ face_mesh = mp_face_mesh.FaceMesh(
     refine_landmarks=True
 )
 
-# EAR landmarks
-LEFT_EYE = [33, 160, 158, 133, 153, 144]
-RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+LEFT_EYE = [33,160,158,133,153,144]
+RIGHT_EYE = [362,385,387,263,373,380]
 
-blink_counter = 0
-blink_state = False
+blink_frames = 0
+blink_count = 0
 
-def eye_aspect_ratio(landmarks, eye_indices, frame_w, frame_h):
+# ------------------------
+# EAR FUNCTION
+# ------------------------
 
-    points = []
+def eye_aspect_ratio(landmarks, eye_indices, w, h):
+
+    pts=[]
 
     for i in eye_indices:
-        x = int(landmarks[i].x * frame_w)
-        y = int(landmarks[i].y * frame_h)
-        points.append((x, y))
+        x=int(landmarks[i].x*w)
+        y=int(landmarks[i].y*h)
+        pts.append((x,y))
 
-    p2_p6 = np.linalg.norm(np.array(points[1]) - np.array(points[5]))
-    p3_p5 = np.linalg.norm(np.array(points[2]) - np.array(points[4]))
-    p1_p4 = np.linalg.norm(np.array(points[0]) - np.array(points[3]))
+    p2_p6=np.linalg.norm(np.array(pts[1])-np.array(pts[5]))
+    p3_p5=np.linalg.norm(np.array(pts[2])-np.array(pts[4]))
+    p1_p4=np.linalg.norm(np.array(pts[0])-np.array(pts[3]))
 
-    ear = (p2_p6 + p3_p5) / (2.0 * p1_p4)
+    ear=(p2_p6+p3_p5)/(2.0*p1_p4)
 
     return ear
 
-# ----------------------------
+# ------------------------
 # FLASK
-# ----------------------------
+# ------------------------
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
@@ -90,15 +101,15 @@ CORS(app)
 def index():
     return app.send_static_file("index.html")
 
-# ----------------------------
+# ------------------------
 # PREDICT
-# ----------------------------
+# ------------------------
 
 @app.route("/predict", methods=["POST"])
 def predict():
 
-    global blink_counter
-    global blink_state
+    global blink_frames
+    global blink_count
 
     try:
 
@@ -110,74 +121,75 @@ def predict():
         img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
         frame = np.array(img)
 
-        h, w, _ = frame.shape
+        h,w,_=frame.shape
 
         # ------------------
         # BLINK DETECTION
         # ------------------
 
-        results = face_mesh.process(frame)
+        rgb=cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 
-        blink_detected = False
+        results=face_mesh.process(rgb)
+
+        blink_detected=False
 
         if results.multi_face_landmarks:
 
-            landmarks = results.multi_face_landmarks[0].landmark
+            landmarks=results.multi_face_landmarks[0].landmark
 
-            leftEAR = eye_aspect_ratio(landmarks, LEFT_EYE, w, h)
-            rightEAR = eye_aspect_ratio(landmarks, RIGHT_EYE, w, h)
+            leftEAR=eye_aspect_ratio(landmarks,LEFT_EYE,w,h)
+            rightEAR=eye_aspect_ratio(landmarks,RIGHT_EYE,w,h)
 
-            ear = (leftEAR + rightEAR) / 2.0
+            ear=(leftEAR+rightEAR)/2
 
-            if ear < 0.21:
-                if not blink_state:
-                    blink_counter += 1
-                    blink_state = True
-                    blink_detected = True
+            if ear<0.21:
+                blink_frames+=1
             else:
-                blink_state = False
+                if blink_frames>2:
+                    blink_count+=1
+                    blink_detected=True
+                blink_frames=0
 
         # ------------------
         # MODEL PREDICTION
         # ------------------
 
-        face = cv2.resize(frame, (IMG_SIZE, IMG_SIZE))
+        face=cv2.resize(frame,(IMG_SIZE,IMG_SIZE))
 
-        arr = preprocess_input(face.astype(np.float32))
-        arr = np.expand_dims(arr, axis=0)
+        arr=preprocess_input(face.astype(np.float32))
+        arr=np.expand_dims(arr,0)
 
-        raw_score = float(model.predict(arr)[0][0])
+        raw_score=float(model.predict(arr,verbose=0)[0][0])
 
-        is_fake = raw_score > THRESHOLD
-        confidence = raw_score if not is_fake else (1 - raw_score)
+        is_fake=raw_score>THRESHOLD
+
+        confidence = raw_score if is_fake else (1-raw_score)
 
         # ------------------
-        # BLINK LOGIC
+        # BLINK ADJUSTMENT
         # ------------------
 
-        if blink_counter >= 2:
-            # real humans blink
-            confidence += 0.1
-            is_fake = False
+        if blink_count>=1:
+            is_fake=False
+            confidence=min(confidence+0.15,1.0)
 
         return jsonify({
 
-            "score": raw_score,
-            "label": "DEEPFAKE" if is_fake else "REAL",
-            "is_fake": bool(is_fake),
-            "confidence": round(confidence * 100, 2),
-            "blinks": blink_counter,
-            "blink_detected": blink_detected
+            "score":round(raw_score,4),
+            "label":"DEEPFAKE" if is_fake else "REAL",
+            "is_fake":bool(is_fake),
+            "confidence":round(confidence*100,2),
+            "blinks":blink_count,
+            "blink_detected":blink_detected
 
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error":str(e)}),500
 
+# ------------------------
 
-# ----------------------------
-
-if __name__ == "__main__":
+if __name__=="__main__":
 
     print("Server started")
 
